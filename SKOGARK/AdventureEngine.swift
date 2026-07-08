@@ -52,9 +52,23 @@ struct Item: Identifiable, Codable {
     /// Goods for sale must be bought, not simply taken.
     var forSale: Bool = false
     var price: Int = 0
+    /// Groups interchangeable goods (e.g. every fish shares kind "fish"), so
+    /// bought copies can be matched by type rather than by unique id.
+    var kind: String? = nil
 
     func matches(_ word: String) -> Bool {
         nouns.contains(word)
+    }
+
+    /// A fresh, carried copy of a for-sale ware: a new id, takeable, and no
+    /// longer for sale. The stall keeps its original so it can restock.
+    func copied(withID newID: String) -> Item {
+        Item(id: newID, name: name, nouns: nouns, description: description,
+             isTakeable: true, isLightSource: isLightSource, isLit: isLit,
+             isOpenable: isOpenable, isOpen: isOpen, isContainer: isContainer,
+             contents: contents, readText: readText, isFixture: false,
+             isCreature: isCreature, dialogue: dialogue, forSale: false,
+             price: price, kind: kind)
     }
 }
 
@@ -143,6 +157,7 @@ final class Game {
     private var flags: Set<String> = []
     private var coins = 0
     private var nextEntryID = 0
+    private var nextPurchaseID = 0
 
     /// All playable scenarios, for the selection menu.
     static let scenarios: [Scenario] = [houseScenario(), townScenario()]
@@ -163,6 +178,7 @@ final class Game {
         inventory = []
         flags = []
         coins = scenario.startingCoins
+        nextPurchaseID = 0
         let world = scenario.build()
         rooms = world.rooms
         items = world.items
@@ -650,25 +666,31 @@ final class Game {
     private func buyItem(_ words: [String]) {
         moves += 1
         guard canSee else { emit("It's too dark to shop."); return }
-        guard let id = resolveItem(words), let item = items[id] else {
-            emit("You don't see that here.")
+        // Resolve specifically to a for-sale ware (so a copy already in the
+        // player's bag doesn't shadow the restocking stall item).
+        let visible = visibleItemIDs()
+        let wareID = words.lazy.compactMap { word in
+            visible.first { self.items[$0]?.matches(word) == true && self.items[$0]?.forSale == true }
+        }.first
+        guard let wareID, let ware = items[wareID] else {
+            if let otherID = resolveItem(words), let other = items[otherID] {
+                emit("The \(other.name) isn't for sale.")
+            } else {
+                emit("You don't see that here.")
+            }
             return
         }
-        guard item.forSale else {
-            emit("The \(item.name) isn't for sale.")
+        guard coins >= ware.price else {
+            emit("You can't afford the \(ware.name) — it costs \(ware.price) coins and you have \(coins).")
             return
         }
-        guard coins >= item.price else {
-            emit("You can't afford the \(item.name) — it costs \(item.price) coins and you have \(coins).")
-            return
-        }
-        coins -= item.price
-        var bought = item
-        bought.forSale = false
-        items[id] = bought
-        removeItemFromWorld(id)
-        inventory.append(id)
-        emit("You buy the \(item.name) for \(item.price) coins. You have \(coins) left.")
+        coins -= ware.price
+        // Mint a fresh carried copy; the stall keeps its ware and restocks.
+        let boughtID = "\(wareID)#\(nextPurchaseID)"
+        nextPurchaseID += 1
+        items[boughtID] = ware.copied(withID: boughtID)
+        inventory.append(boughtID)
+        emit("You buy the \(ware.name) for \(ware.price) coins. You have \(coins) left.")
     }
 
     private func showInventory() {
@@ -736,6 +758,7 @@ final class Game {
         var currentRoomID: String
         var flags: [String]
         var coins: Int
+        var nextPurchaseID: Int?
         var score: Int
         var moves: Int
         var isWon: Bool
@@ -747,6 +770,7 @@ final class Game {
         let snapshot = Snapshot(
             rooms: rooms, items: items, inventory: inventory,
             currentRoomID: currentRoomID, flags: Array(flags), coins: coins,
+            nextPurchaseID: nextPurchaseID,
             score: score, moves: moves, isWon: isWon,
             transcript: transcript, nextEntryID: nextEntryID
         )
@@ -772,6 +796,7 @@ final class Game {
             currentRoomID = snapshot.currentRoomID
             flags = Set(snapshot.flags)
             coins = snapshot.coins
+            nextPurchaseID = snapshot.nextPurchaseID ?? 0
             score = snapshot.score
             moves = snapshot.moves
             isWon = snapshot.isWon
@@ -928,7 +953,7 @@ extension Game {
             ─────────────────────────────
             """,
             startRoomID: "innKitchen",
-            maxScore: 15,
+            maxScore: 20,
             startingCoins: 25,
             build: buildTownWorld,
             fixtureLine: { game, id in
@@ -943,20 +968,37 @@ extension Game {
                     case "butcherman": return "A burly butcher stands behind the counter."
                     case "baker": return "A cheerful baker dusts flour from her hands."
                     case "fishwife": return "A brisk fishwife tends her glistening stall."
+                    case "cat": return "A skinny stray cat loiters by the stall, eyeing the fish hopefully."
                     default: return nil
                     }
                 }
                 return nil
             },
             onGive: { game, gift, recipient in
+                // Optional side-quest: the stray cat by the fishmonger wants a fish.
+                if recipient == "cat" {
+                    if game.has(flag: "catFed") {
+                        game.emit("The cat has already had its fill and just blinks at you contentedly.")
+                        return true
+                    }
+                    guard game.item(gift)?.kind == "fish" else {
+                        game.emit("The cat sniffs the \(game.item(gift)?.name ?? "offering") and turns away — it only wants fish.")
+                        return true
+                    }
+                    game.set(flag: "catFed")
+                    game.consumeFromInventory(gift)
+                    game.award(5, nil)
+                    game.emit("You set the fish down for the stray cat. It pounces, devours the treat, and rubs against your leg with a rumbling purr.")
+                    return true
+                }
                 guard recipient == "cook" else { return false }
                 let goods = ["meat", "bread", "fish"]
-                guard goods.contains(gift) else {
+                guard let kind = game.item(gift)?.kind, goods.contains(kind) else {
                     game.emit("The cook chuckles. \"That's not on my list, friend.\"")
                     return true
                 }
                 game.consumeFromInventory(gift)
-                game.set(flag: "delivered_\(gift)")
+                game.set(flag: "delivered_\(kind)")
                 game.award(5, nil)
                 let deliveredCount = goods.filter { game.has(flag: "delivered_\($0)") }.count
                 if deliveredCount == goods.count {
@@ -1091,13 +1133,13 @@ private func buildTownWorld() -> (rooms: [String: Room], items: [String: Item]) 
              isFixture: true, isCreature: true))
     add(Item(id: "meat", name: "cut of meat", nouns: ["meat", "beef", "cut"],
              description: "A good red cut, trimmed and ready.",
-             isTakeable: true, isFixture: true, forSale: true, price: 8))
+             isTakeable: true, isFixture: true, forSale: true, price: 8, kind: "meat"))
     add(Item(id: "bread", name: "loaf of bread", nouns: ["bread", "loaf"],
              description: "A crusty loaf, still warm from the oven.",
-             isTakeable: true, isFixture: true, forSale: true, price: 5))
+             isTakeable: true, isFixture: true, forSale: true, price: 5, kind: "bread"))
     add(Item(id: "fish", name: "fresh fish", nouns: ["fish", "herring", "catch"],
              description: "A silvery fish laid out on crushed ice.",
-             isTakeable: true, isFixture: true, forSale: true, price: 6))
+             isTakeable: true, isFixture: true, forSale: true, price: 6, kind: "fish"))
     add(Item(id: "butcherman", name: "butcher", nouns: ["butcher", "man"],
              description: "A burly butcher in a striped apron.",
              isFixture: true, isCreature: true,
@@ -1110,12 +1152,16 @@ private func buildTownWorld() -> (rooms: [String: Room], items: [String: Item]) 
              description: "A brisk fishwife in oilskins.",
              isFixture: true, isCreature: true,
              dialogue: "\"Caught this very morning,\" says the fishwife. \"Six coins — BUY FISH and it's yours.\""))
+    add(Item(id: "cat", name: "stray cat", nouns: ["cat", "kitten", "stray"],
+             description: "A skinny stray cat loiters by the fishmonger's stall, watching the catch with hungry, hopeful eyes.",
+             isFixture: true, isCreature: true,
+             dialogue: "The stray cat mews at you and glances pointedly at the fish."))
 
     var rooms: [String: Room] = [:]
     func add(_ room: Room) { rooms[room.id] = room }
 
     add(Room(id: "innKitchen", title: "The Inn Kitchen",
-             description: "You're in the warm kitchen of the village inn. The cook has sent you out for tonight's feast — a shopping list lies on the table, and a purse of coins is already in your pocket. The square is just outside to the north.",
+             description: "You're in the warm kitchen of the village inn. The cook has sent you out for tonight's feast — a shopping list lies on the table, and a purse of coins is already in your pocket. The square is just outside to the north. (Word is a stray cat haunts the fishmonger's stall and would adore a spare fish, if your coins stretch that far.)",
              exits: [.north: "square"],
              items: ["list", "cook"]))
     add(Room(id: "square", title: "Village Square",
@@ -1132,7 +1178,7 @@ private func buildTownWorld() -> (rooms: [String: Room], items: [String: Item]) 
     add(Room(id: "townFish", title: "The Fishmonger",
              description: "The day's catch glistens on crushed ice while the fishwife calls her prices. The square is back to the south.",
              exits: [.south: "square"],
-             items: ["fish", "fishwife"]))
+             items: ["fish", "fishwife", "cat"]))
 
     return (rooms, items)
 }

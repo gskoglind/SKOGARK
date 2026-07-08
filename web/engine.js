@@ -29,7 +29,7 @@ function makeItem(props) {
         isOpenable: false, isOpen: false, isContainer: false,
         contents: [], readText: null,
         isFixture: false, isCreature: false, dialogue: null,
-        forSale: false, price: 0,
+        forSale: false, price: 0, kind: null,
     }, props);
 }
 
@@ -54,6 +54,7 @@ class Game {
         this.flags = new Set();
         this.coins = 0;
         this.nextEntryID = 0;
+        this.nextPurchaseID = 0;
         this.startFresh(false);
     }
 
@@ -65,6 +66,7 @@ class Game {
         this.inventory = [];
         this.flags = new Set();
         this.coins = this.scenario.startingCoins;
+        this.nextPurchaseID = 0;
         const world = this.scenario.build();
         this.rooms = world.rooms;
         this.items = world.items;
@@ -499,19 +501,34 @@ class Game {
     buyItem(words) {
         this.moves += 1;
         if (!this.canSee()) { this.emit("It's too dark to shop."); return; }
-        const id = this.resolveItem(words);
-        const item = id && this.items[id];
-        if (!item) { this.emit("You don't see that here."); return; }
-        if (!item.forSale) { this.emit(`The ${item.name} isn't for sale.`); return; }
-        if (this.coins < item.price) {
-            this.emit(`You can't afford the ${item.name} — it costs ${item.price} coins and you have ${this.coins}.`);
+        // Resolve specifically to a for-sale ware (so a copy already in the
+        // player's bag doesn't shadow the restocking stall item).
+        const visible = this.visibleItemIDs();
+        let wareID = null;
+        for (const word of words) {
+            const found = visible.find((i) => this.items[i] && this.items[i].nouns.includes(word) && this.items[i].forSale);
+            if (found) { wareID = found; break; }
+        }
+        if (!wareID) {
+            const other = this.resolveItem(words);
+            if (other && this.items[other]) this.emit(`The ${this.items[other].name} isn't for sale.`);
+            else this.emit("You don't see that here.");
             return;
         }
-        this.coins -= item.price;
-        item.forSale = false;
-        this.removeItemFromWorld(id);
-        this.inventory.push(id);
-        this.emit(`You buy the ${item.name} for ${item.price} coins. You have ${this.coins} left.`);
+        const ware = this.items[wareID];
+        if (this.coins < ware.price) {
+            this.emit(`You can't afford the ${ware.name} — it costs ${ware.price} coins and you have ${this.coins}.`);
+            return;
+        }
+        this.coins -= ware.price;
+        // Mint a fresh carried copy; the stall keeps its ware and restocks.
+        const boughtID = `${wareID}#${this.nextPurchaseID}`;
+        this.nextPurchaseID += 1;
+        this.items[boughtID] = Object.assign(makeItem({}), ware, {
+            id: boughtID, isTakeable: true, isFixture: false, forSale: false,
+        });
+        this.inventory.push(boughtID);
+        this.emit(`You buy the ${ware.name} for ${ware.price} coins. You have ${this.coins} left.`);
     }
 
     showInventory() {
@@ -565,6 +582,7 @@ class Game {
         const snapshot = {
             rooms: this.rooms, items: this.items, inventory: this.inventory,
             currentRoomID: this.currentRoomID, flags: Array.from(this.flags), coins: this.coins,
+            nextPurchaseID: this.nextPurchaseID,
             score: this.score, moves: this.moves, isWon: this.isWon,
             transcript: this.transcript, nextEntryID: this.nextEntryID,
         };
@@ -588,6 +606,7 @@ class Game {
             this.currentRoomID = s.currentRoomID;
             this.flags = new Set(s.flags || []);
             this.coins = s.coins || 0;
+            this.nextPurchaseID = s.nextPurchaseID || 0;
             this.score = s.score;
             this.moves = s.moves;
             this.isWon = s.isWon;
@@ -728,7 +747,7 @@ function townScenario() {
             "─────────────────────────────",
         ].join("\n"),
         startRoomID: "innKitchen",
-        maxScore: 15,
+        maxScore: 20,
         startingCoins: 25,
         build: buildTownWorld,
         fixtureLine(game, id) {
@@ -744,20 +763,39 @@ function townScenario() {
                     case "butcherman": return "A burly butcher stands behind the counter.";
                     case "baker": return "A cheerful baker dusts flour from her hands.";
                     case "fishwife": return "A brisk fishwife tends her glistening stall.";
+                    case "cat": return "A skinny stray cat loiters by the stall, eyeing the fish hopefully.";
                     default: return null;
                 }
             }
             return null;
         },
         onGive(game, gift, recipient) {
+            // Optional side-quest: the stray cat by the fishmonger wants a fish.
+            if (recipient === "cat") {
+                if (game.has("catFed")) {
+                    game.emit("The cat has already had its fill and just blinks at you contentedly.");
+                    return true;
+                }
+                if (!(game.item(gift) && game.item(gift).kind === "fish")) {
+                    const gname = game.item(gift) ? game.item(gift).name : "offering";
+                    game.emit(`The cat sniffs the ${gname} and turns away — it only wants fish.`);
+                    return true;
+                }
+                game.set("catFed");
+                game.consumeFromInventory(gift);
+                game.award(5, null);
+                game.emit("You set the fish down for the stray cat. It pounces, devours the treat, and rubs against your leg with a rumbling purr.");
+                return true;
+            }
             if (recipient !== "cook") return false;
             const goods = ["meat", "bread", "fish"];
-            if (!goods.includes(gift)) {
+            const kind = game.item(gift) ? game.item(gift).kind : null;
+            if (!kind || !goods.includes(kind)) {
                 game.emit('The cook chuckles. "That\'s not on my list, friend."');
                 return true;
             }
             game.consumeFromInventory(gift);
-            game.set(`delivered_${gift}`);
+            game.set(`delivered_${kind}`);
             game.award(5, null);
             const deliveredCount = goods.filter((g) => game.has(`delivered_${g}`)).length;
             if (deliveredCount === goods.length) {
@@ -869,11 +907,11 @@ function buildTownWorld() {
         description: "The inn's cook, rosy-cheeked and flour-dusted, waiting for her supplies.",
         isFixture: true, isCreature: true });
     addItem({ id: "meat", name: "cut of meat", nouns: ["meat", "beef", "cut"],
-        description: "A good red cut, trimmed and ready.", isTakeable: true, isFixture: true, forSale: true, price: 8 });
+        description: "A good red cut, trimmed and ready.", isTakeable: true, isFixture: true, forSale: true, price: 8, kind: "meat" });
     addItem({ id: "bread", name: "loaf of bread", nouns: ["bread", "loaf"],
-        description: "A crusty loaf, still warm from the oven.", isTakeable: true, isFixture: true, forSale: true, price: 5 });
+        description: "A crusty loaf, still warm from the oven.", isTakeable: true, isFixture: true, forSale: true, price: 5, kind: "bread" });
     addItem({ id: "fish", name: "fresh fish", nouns: ["fish", "herring", "catch"],
-        description: "A silvery fish laid out on crushed ice.", isTakeable: true, isFixture: true, forSale: true, price: 6 });
+        description: "A silvery fish laid out on crushed ice.", isTakeable: true, isFixture: true, forSale: true, price: 6, kind: "fish" });
     addItem({ id: "butcherman", name: "butcher", nouns: ["butcher", "man"],
         description: "A burly butcher in a striped apron.", isFixture: true, isCreature: true,
         dialogue: "\"Finest cuts in the village,\" the butcher grunts. \"Eight coins and that one's yours — just say BUY MEAT.\"" });
@@ -883,11 +921,15 @@ function buildTownWorld() {
     addItem({ id: "fishwife", name: "fishwife", nouns: ["fishwife", "fishmonger", "woman"],
         description: "A brisk fishwife in oilskins.", isFixture: true, isCreature: true,
         dialogue: "\"Caught this very morning,\" says the fishwife. \"Six coins — BUY FISH and it's yours.\"" });
+    addItem({ id: "cat", name: "stray cat", nouns: ["cat", "kitten", "stray"],
+        description: "A skinny stray cat loiters by the fishmonger's stall, watching the catch with hungry, hopeful eyes.",
+        isFixture: true, isCreature: true,
+        dialogue: "The stray cat mews at you and glances pointedly at the fish." });
 
     const rooms = {};
     const addRoom = (p) => { const r = makeRoom(p); rooms[r.id] = r; };
     addRoom({ id: "innKitchen", title: "The Inn Kitchen",
-        description: "You're in the warm kitchen of the village inn. The cook has sent you out for tonight's feast — a shopping list lies on the table, and a purse of coins is already in your pocket. The square is just outside to the north.",
+        description: "You're in the warm kitchen of the village inn. The cook has sent you out for tonight's feast — a shopping list lies on the table, and a purse of coins is already in your pocket. The square is just outside to the north. (Word is a stray cat haunts the fishmonger's stall and would adore a spare fish, if your coins stretch that far.)",
         exits: { north: "square" }, items: ["list", "cook"] });
     addRoom({ id: "square", title: "Village Square",
         description: "The cobbled square, ringed with shops. The butcher is to the east, the bakery to the west, and the fishmonger to the north. The inn's kitchen is back to the south.",
@@ -900,7 +942,7 @@ function buildTownWorld() {
         exits: { east: "square" }, items: ["bread", "baker"] });
     addRoom({ id: "townFish", title: "The Fishmonger",
         description: "The day's catch glistens on crushed ice while the fishwife calls her prices. The square is back to the south.",
-        exits: { south: "square" }, items: ["fish", "fishwife"] });
+        exits: { south: "square" }, items: ["fish", "fishwife", "cat"] });
 
     return { rooms, items };
 }
