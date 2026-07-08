@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="SKOGARK — a tiny text adventure.">
+    <title>SKOGARK — A Tiny Text Adventure</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main id="app">
+        <div id="transcript" role="log" aria-live="polite" aria-label="Game transcript"></div>
+        <form id="inputBar" autocomplete="off">
+            <span class="prompt" aria-hidden="true">&gt;</span>
+            <input id="command" type="text" name="command"
+                   placeholder="What do you do?"
+                   autocapitalize="none" autocomplete="off" autocorrect="off"
+                   spellcheck="false" enterkeyhint="send" aria-label="Enter a command">
+            <button type="submit">Go</button>
+        </form>
+    </main>
+
+    <script src="engine.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
