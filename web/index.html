@@ -10,15 +10,27 @@
 </head>
 <body>
     <main id="app">
-        <div id="transcript" role="log" aria-live="polite" aria-label="Game transcript"></div>
-        <form id="inputBar" autocomplete="off">
-            <span class="prompt" aria-hidden="true">&gt;</span>
-            <input id="command" type="text" name="command"
-                   placeholder="What do you do?"
-                   autocapitalize="none" autocomplete="off" autocorrect="off"
-                   spellcheck="false" enterkeyhint="send" aria-label="Enter a command">
-            <button type="submit">Go</button>
-        </form>
+        <section id="menu">
+            <h1>SKOGARK</h1>
+            <p class="tagline">A tiny text adventure</p>
+            <div id="scenarioList"></div>
+        </section>
+
+        <section id="game" hidden>
+            <div id="titlebar">
+                <button id="menuButton" type="button">&lsaquo; Menu</button>
+                <span id="gameTitle"></span>
+            </div>
+            <div id="transcript" role="log" aria-live="polite" aria-label="Game transcript"></div>
+            <form id="inputBar" autocomplete="off">
+                <span class="prompt" aria-hidden="true">&gt;</span>
+                <input id="command" type="text" name="command"
+                       placeholder="What do you do?"
+                       autocapitalize="none" autocomplete="off" autocorrect="off"
+                       spellcheck="false" enterkeyhint="send" aria-label="Enter a command">
+                <button type="submit">Go</button>
+            </form>
+        </section>
     </main>
 
     <script src="engine.js"></script>

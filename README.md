@@ -8,9 +8,14 @@ A tiny Zork-style text adventure, in two forms:
 - **Web app** — a self-contained static site in [`web/`](web/) that ports the same
   engine to JavaScript, so it runs in any browser with no server or build step.
 
-Explore a white house and the caverns beneath it, light the lantern before the grue
-gets you, and get the jeweled egg into the trophy case. There's a small village to the
-east, too — feed the stray cat a fish if you find one.
+Both forms share one scenario-driven engine and open on a menu with two adventures:
+
+- **Explore a House** — explore a white house and the caverns beneath it, light the
+  lantern before the grue gets you, and get the jeweled egg into the trophy case (with a
+  small village to the east, where a stray cat likes fish).
+- **Explore the Town** — the inn's cook sends you out with a purse of coins to buy a cut
+  of meat, a loaf of bread, and a fresh fish, then deliver them. Features money (`buy`),
+  shopkeeper dialogue (`talk`), and a delivery goal loop.
 
 ## Play on the web
 

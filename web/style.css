@@ -12,6 +12,7 @@ html, body {
 
 body {
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    color: #e6e6e6;
 }
 
 #app {
@@ -22,6 +23,109 @@ body {
     height: 100dvh;
     max-width: 900px;
     margin: 0 auto;
+}
+
+/* ---- Menu ---- */
+
+#menu {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px;
+}
+
+#menu h1 {
+    margin: 0;
+    font-size: clamp(36px, 9vw, 52px);
+    font-weight: 800;
+    color: #4ade80;
+    letter-spacing: 2px;
+}
+
+#menu .tagline {
+    margin: 0 0 18px;
+    color: #8a8a8a;
+    font-size: 15px;
+}
+
+#scenarioList {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    max-width: 480px;
+}
+
+.scenario {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: #191919;
+    border: 1px solid #3a3a3a;
+    border-radius: 12px;
+    padding: 16px;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.scenario:hover,
+.scenario:focus-visible {
+    background: #202020;
+    border-color: #4ade80;
+    outline: none;
+}
+
+.scenario-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #4ade80;
+    margin-bottom: 6px;
+}
+
+.scenario-blurb {
+    font-size: 13px;
+    line-height: 1.4;
+    color: #b0b0b0;
+}
+
+/* ---- Game ---- */
+
+#game {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+#titlebar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    border-bottom: 1px solid #222;
+    background: #000;
+}
+
+#menuButton {
+    background: transparent;
+    border: none;
+    color: #4ade80;
+    font: inherit;
+    font-size: 15px;
+    cursor: pointer;
+    padding: 4px 0;
+}
+
+#gameTitle {
+    margin-left: auto;
+    color: #9a9a9a;
+    font-size: 14px;
+    font-weight: 600;
 }
 
 #transcript {

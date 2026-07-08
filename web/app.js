@@ -1,22 +1,62 @@
-// SKOGARK — terminal front end.
+// SKOGARK — front end (web equivalent of ContentView.swift).
 //
-// The web equivalent of ContentView.swift: a scrolling transcript plus an
-// input line. It reads game.transcript after each command and appends the
-// new entries, then keeps the newest line pinned to the bottom (the web
-// counterpart of defaultScrollAnchor(.bottom)).
+// Shows a scenario menu, then a scrolling transcript + input line for the
+// chosen game. "Menu" returns to the chooser. New transcript entries are
+// appended and the newest line is kept pinned to the bottom.
 
 "use strict";
 
 (function () {
-    const game = new Game();
-
+    const menuEl = document.getElementById("menu");
+    const gameEl = document.getElementById("game");
+    const scenarioList = document.getElementById("scenarioList");
     const transcriptEl = document.getElementById("transcript");
     const form = document.getElementById("inputBar");
     const input = document.getElementById("command");
     const goButton = form.querySelector("button[type=submit]");
+    const menuButton = document.getElementById("menuButton");
+    const gameTitle = document.getElementById("gameTitle");
 
-    // How many transcript entries are already on screen.
-    let rendered = 0;
+    let game = null;
+    let rendered = 0; // transcript entries already on screen
+
+    function buildMenu() {
+        for (const scenario of SCENARIOS) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "scenario";
+
+            const title = document.createElement("div");
+            title.className = "scenario-title";
+            title.textContent = scenario.title;
+
+            const blurb = document.createElement("div");
+            blurb.className = "scenario-blurb";
+            blurb.textContent = scenario.blurb;
+
+            button.append(title, blurb);
+            button.addEventListener("click", () => startGame(scenario));
+            scenarioList.appendChild(button);
+        }
+    }
+
+    function startGame(scenario) {
+        game = new Game(scenario);
+        rendered = 0;
+        transcriptEl.textContent = "";
+        gameTitle.textContent = scenario.title;
+        menuEl.hidden = true;
+        gameEl.hidden = false;
+        render();
+        updateButton();
+        input.focus();
+    }
+
+    function backToMenu() {
+        gameEl.hidden = true;
+        menuEl.hidden = false;
+        game = null;
+    }
 
     function render() {
         const fragment = document.createDocumentFragment();
@@ -24,7 +64,7 @@
             const entry = game.transcript[i];
             const div = document.createElement("div");
             div.className = "entry " + (entry.isCommand ? "cmd" : "out");
-            div.textContent = entry.text; // textContent keeps newlines literal (CSS pre-wrap renders them)
+            div.textContent = entry.text;
             fragment.appendChild(div);
         }
         transcriptEl.appendChild(fragment);
@@ -38,6 +78,7 @@
 
     form.addEventListener("submit", function (event) {
         event.preventDefault();
+        if (!game) return;
         const value = input.value;
         if (value.trim().length === 0) return;
         input.value = "";
@@ -48,8 +89,7 @@
     });
 
     input.addEventListener("input", updateButton);
+    menuButton.addEventListener("click", backToMenu);
 
-    updateButton();
-    render();
-    input.focus();
+    buildMenu();
 })();

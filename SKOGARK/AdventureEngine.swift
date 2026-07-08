@@ -25,7 +25,8 @@ enum Direction: String, CaseIterable, Codable {
 }
 
 /// A physical object in the world. Items can be carried, read, opened,
-/// act as light sources, or serve as containers for other items.
+/// act as light sources, serve as containers, be creatures you talk to,
+/// or be goods for sale in a shop.
 struct Item: Identifiable, Codable {
     let id: String
     var name: String
@@ -41,6 +42,16 @@ struct Item: Identifiable, Codable {
     /// IDs of items currently held inside this container.
     var contents: [String] = []
     var readText: String? = nil
+    /// A fixture is woven into the room's prose rather than listed as
+    /// "There is a … here."
+    var isFixture: Bool = false
+    /// A creature can be talked to and given things.
+    var isCreature: Bool = false
+    /// What the creature says by default when talked to.
+    var dialogue: String? = nil
+    /// Goods for sale must be bought, not simply taken.
+    var forSale: Bool = false
+    var price: Int = 0
 
     func matches(_ word: String) -> Bool {
         nouns.contains(word)
@@ -59,6 +70,46 @@ struct Room: Identifiable, Codable {
     var visited: Bool = false
 }
 
+// MARK: - Scenario
+
+/// A self-contained adventure: its world data plus a small set of optional
+/// rule hooks. The engine (`Game`) is generic and drives whichever scenario
+/// it's handed, so multiple games share one engine, one UI, and one deploy.
+///
+/// Every hook receives the `Game` as a parameter (no capture), and the hook
+/// closures are defined inside `Game`'s scenario factories so they can reach
+/// the engine's private helpers.
+struct Scenario: Identifiable {
+    let id: String
+    let title: String
+    let blurb: String
+    let banner: String
+    let startRoomID: String
+    let maxScore: Int
+    let startingCoins: Int
+    /// Builds a fresh world (called on new game and RESTART).
+    let build: () -> (rooms: [String: Room], items: [String: Item])
+
+    /// Returns a blocking message if a move in `direction` is gated here.
+    var portalGate: ((Game, Direction) -> String?)? = nil
+    /// Maps a portal item ("go through the window") to a travel direction.
+    var portalDirection: ((Game, String) -> Direction?)? = nil
+    /// Hides a discovered-later exit from the "obvious exits" listing.
+    var exitHidden: ((Game, Direction) -> Bool)? = nil
+    /// A custom room-description line for a fixture (state, price, …).
+    var fixtureLine: ((Game, String) -> String?)? = nil
+    /// Reacts to a successful TAKE.
+    var onTake: ((Game, String) -> Void)? = nil
+    /// Handles MOVE/PUSH of an object; return true if handled.
+    var onMoveObject: ((Game, String) -> Bool)? = nil
+    /// Handles GIVE of a carried item to a creature; return true if handled.
+    var onGive: ((Game, _ gift: String, _ recipient: String) -> Bool)? = nil
+    /// Reacts to a successful PUT of an item into a container.
+    var onPut: ((Game, _ object: String, _ target: String) -> Void)? = nil
+    /// Handles TALK to a creature; return true if handled.
+    var onTalk: ((Game, String) -> Bool)? = nil
+}
+
 // MARK: - Transcript
 
 /// One line of output in the scrolling transcript. Commands the player
@@ -73,7 +124,8 @@ struct TranscriptEntry: Identifiable, Codable {
 
 /// A small, fully deterministic text-adventure engine in the spirit of
 /// SkoGarK. All state lives here; `process(_:)` is the single entry point
-/// that turns a line of typed input into transcript output.
+/// that turns a line of typed input into transcript output. The world it
+/// runs is supplied as a `Scenario`.
 @Observable
 final class Game {
     private(set) var transcript: [TranscriptEntry] = []
@@ -81,107 +133,52 @@ final class Game {
     private(set) var score = 0
     private(set) var isWon = false
 
+    let scenario: Scenario
+
     private var rooms: [String: Room] = [:]
     private var items: [String: Item] = [:]
     private var inventory: [String] = []
-    private var currentRoomID: String = "westOfHouse"
-    private var rugMoved = false
-    private var catFed = false
+    private var currentRoomID: String = ""
+    /// Generic on/off world state (rug moved, cat fed, goods delivered, …).
+    private var flags: Set<String> = []
+    private var coins = 0
     private var nextEntryID = 0
 
-    /// Item IDs that behave as creatures you can give things to.
-    private let creatureIDs: Set<String> = ["cat"]
+    /// All playable scenarios, for the selection menu.
+    static let scenarios: [Scenario] = [houseScenario(), townScenario()]
 
-    private let maxScore = 25
+    convenience init() { self.init(scenario: Game.houseScenario()) }
 
-    init() {
-        buildWorld()
-        emit(bannerText, asCommand: false)
+    init(scenario: Scenario) {
+        self.scenario = scenario
+        startFresh(clearTranscript: false)
+    }
+
+    /// (Re)builds the world from the scenario and prints the opening.
+    private func startFresh(clearTranscript: Bool) {
+        if clearTranscript { transcript = [] }
+        moves = 0
+        score = 0
+        isWon = false
+        inventory = []
+        flags = []
+        coins = scenario.startingCoins
+        let world = scenario.build()
+        rooms = world.rooms
+        items = world.items
+        currentRoomID = scenario.startRoomID
+        emit(scenario.banner, asCommand: false)
         describeCurrentRoom(force: true)
     }
 
-    // MARK: World Construction
+    // MARK: Scenario-facing helpers (used by rule hooks)
 
-    private func buildWorld() {
-        items = [:]
-        add(Item(id: "leaflet", name: "leaflet", nouns: ["leaflet", "paper", "mail"],
-                 description: "A small paper leaflet.", isTakeable: true,
-                 readText: "\"WELCOME TO SKOGARK!\n\nSkoGarK is a game of adventure and low cunning. In it you will explore a house and the caverns beneath it in search of treasure. Beware the grue — it lurks in darkness. Type HELP if you get stuck.\""))
-        add(Item(id: "mailbox", name: "small mailbox", nouns: ["mailbox", "box"],
-                 description: "It's a small mailbox.", isOpenable: true, isContainer: true,
-                 contents: ["leaflet"]))
-        add(Item(id: "window", name: "window", nouns: ["window"],
-                 description: "The kitchen window is slightly ajar.", isOpenable: true))
-        add(Item(id: "lantern", name: "brass lantern", nouns: ["lantern", "lamp", "light"],
-                 description: "A battered brass lantern.", isTakeable: true, isLightSource: true))
-        add(Item(id: "bottle", name: "glass bottle", nouns: ["bottle", "water"],
-                 description: "A glass bottle containing a little water.", isTakeable: true))
-        add(Item(id: "rug", name: "oriental rug", nouns: ["rug", "carpet"],
-                 description: "A large oriental rug in the center of the room."))
-        add(Item(id: "trapdoor", name: "trap door", nouns: ["trapdoor", "trap", "door", "hatch"],
-                 description: "A closed wooden trap door in the floor.", isOpenable: true))
-        add(Item(id: "case", name: "trophy case", nouns: ["case", "trophy"],
-                 description: "A handsome glass trophy case, waiting to be filled.",
-                 isOpenable: true, isContainer: true))
-        add(Item(id: "egg", name: "jeweled egg", nouns: ["egg", "jewel", "treasure"],
-                 description: "A stunning jeweled egg that glitters even in faint light.",
-                 isTakeable: true))
-        add(Item(id: "fish", name: "fresh fish", nouns: ["fish", "herring", "catch"],
-                 description: "A fat, silver fish fresh from the stall, still glistening.",
-                 isTakeable: true))
-        add(Item(id: "cat", name: "stray cat", nouns: ["cat", "kitten", "stray"],
-                 description: "A scruffy stray cat with matted fur, watching the fishmonger's stall with hungry, hopeful eyes."))
-
-        rooms = [:]
-        add(Room(id: "westOfHouse", title: "West of House",
-                 description: "You are standing in an open field west of a white house, with a boarded front door. A small mailbox stands here.",
-                 exits: [.east: "behindHouse", .north: "behindHouse"],
-                 items: ["mailbox"]))
-        add(Room(id: "behindHouse", title: "Behind House",
-                 description: "You are behind the white house. A path leads into the forest to the east. One window into the kitchen is slightly ajar.",
-                 exits: [.west: "westOfHouse", .inside: "kitchen", .east: "forestPath"],
-                 items: ["window"]))
-        add(Room(id: "kitchen", title: "Kitchen",
-                 description: "You are in the kitchen of the white house. A table sits in the middle of the room. A passage leads west, and a dark staircase leads up. To the east, a window opens onto the yard.",
-                 exits: [.west: "livingRoom", .outside: "behindHouse", .east: "behindHouse"],
-                 items: ["lantern", "bottle"]))
-        add(Room(id: "livingRoom", title: "Living Room",
-                 description: "You are in the living room. There is a trophy case here, and a large oriental rug lies in the center of the floor. A doorway leads east to the kitchen.",
-                 exits: [.east: "kitchen", .down: "cellar"],
-                 items: ["case", "rug"]))
-        add(Room(id: "cellar", title: "Cellar",
-                 description: "You are in a damp, cramped cellar carved from the rock. A rickety staircase leads up toward the living room.",
-                 exits: [.up: "livingRoom"],
-                 items: ["egg"], isDark: true))
-
-        // The village, reached along the forest path east of the house.
-        add(Room(id: "forestPath", title: "Forest Path",
-                 description: "A narrow dirt path winds through cool, whispering pines. The white house lies back to the west, while ahead to the east the trees thin toward the rooftops of a village.",
-                 exits: [.west: "behindHouse", .east: "villageSquare"]))
-        add(Room(id: "villageSquare", title: "Village Square",
-                 description: "You stand on the cobbles at the heart of a small village. Shops crowd the edges: a butcher to the north and a bakery to the south. A lane leads east toward the market, and the forest path returns west toward the house.",
-                 exits: [.west: "forestPath", .north: "butcher", .south: "bakery", .east: "marketRow"]))
-        add(Room(id: "marketRow", title: "Market Row",
-                 description: "A bustling market row, hemmed in by timber-framed storefronts. A fishmonger's stall stands to the north and a blacksmith's forge glows to the south. The village square lies back to the west.",
-                 exits: [.west: "villageSquare", .north: "fishmonger", .south: "blacksmith"],
-                 items: ["cat"]))
-        add(Room(id: "butcher", title: "The Butcher",
-                 description: "The butcher's shop smells of sawdust and cold iron. Cuts of meat hang from steel hooks while a broad-shouldered butcher wipes his hands on a striped apron. The square is back to the south.",
-                 exits: [.south: "villageSquare"]))
-        add(Room(id: "bakery", title: "The Bakery",
-                 description: "Warm air and the scent of fresh bread fill the bakery. Loaves and pastries are stacked on wooden shelves, and a flour-dusted baker nods you a greeting. The square lies north.",
-                 exits: [.north: "villageSquare"]))
-        add(Room(id: "fishmonger", title: "The Fishmonger",
-                 description: "The fishmonger's stall glistens with the day's catch laid out on crushed ice. A brisk woman in oilskins calls her prices to no one in particular. Market row is back to the south.",
-                 exits: [.south: "marketRow"],
-                 items: ["fish"]))
-        add(Room(id: "blacksmith", title: "The Blacksmith",
-                 description: "Heat rolls off the blacksmith's forge, and the ring of hammer on anvil fills the air. A soot-streaked smith pauses, tongs in hand, to size you up. Market row lies north.",
-                 exits: [.north: "marketRow"]))
-    }
-
-    private func add(_ item: Item) { items[item.id] = item }
-    private func add(_ room: Room) { rooms[room.id] = room }
+    func item(_ id: String) -> Item? { items[id] }
+    var roomID: String { currentRoomID }
+    func has(flag: String) -> Bool { flags.contains(flag) }
+    func set(flag: String) { flags.insert(flag) }
+    var purse: Int { coins }
+    func isCarrying(_ id: String) -> Bool { inventory.contains(id) }
 
     // MARK: Input Handling
 
@@ -220,7 +217,6 @@ final class Game {
                 describeCurrentRoom(force: true)
             }
         case "what", "survey":
-            // "what can i see", "what's here", or a bare SURVEY.
             lookAround()
         case "go", "walk", "run", "climb", "enter", "crawl", "cross":
             handleGo(rest)
@@ -246,10 +242,16 @@ final class Game {
             put(rest)
         case "give", "offer", "feed":
             give(rest)
+        case "talk", "ask", "speak", "greet":
+            talkTo(rest)
+        case "buy", "purchase":
+            buyItem(rest)
+        case "coins", "money", "wealth":
+            emit(coins > 0 ? "You have \(coins) coins." : "You don't have any money.")
         case "inventory", "i", "inv":
             showInventory()
         case "score":
-            emit("Your score is \(score) of a possible \(maxScore), in \(moves) moves.")
+            emit("Your score is \(score) of a possible \(scenario.maxScore), in \(moves) moves.")
         case "why":
             emit("Why not? Adventure rarely waits for a reason. Type HELP if you're stuck.")
         case "help", "?":
@@ -279,23 +281,10 @@ final class Game {
         moves += 1
         guard let room = rooms[currentRoomID] else { return }
 
-        // Entering the house requires the kitchen window to be open.
-        if direction == .inside, currentRoomID == "behindHouse",
-           items["window"]?.isOpen != true {
-            emit("The window is closed. You'll need to open it first.")
+        // Scenario-specific gating (locked/closed portals).
+        if let blocked = scenario.portalGate?(self, direction) {
+            emit(blocked)
             return
-        }
-
-        // Descending to the cellar requires an open trap door.
-        if direction == .down, currentRoomID == "livingRoom" {
-            guard rugMoved else {
-                emit("You can't go that way.")
-                return
-            }
-            guard items["trapdoor"]?.isOpen == true else {
-                emit("The trap door is closed.")
-                return
-            }
         }
 
         guard let destination = room.exits[direction] else {
@@ -308,20 +297,17 @@ final class Game {
     }
 
     /// Handles a movement verb whose object may be a direction word, a
-    /// portal you pass through ("go through the window", "enter window"),
-    /// or the name of an adjacent room ("go to the kitchen").
+    /// portal you pass through ("go through the window"), or the name of
+    /// an adjacent room ("go to the kitchen").
     private func handleGo(_ words: [String]) {
-        // 1. An explicit direction word anywhere in the phrase.
         if let dir = words.compactMap({ Direction.from($0) }).first {
             move(dir)
             return
         }
-        // 2. A named portal, such as the kitchen window or the trap door.
-        if let id = resolveItem(words), let dir = portalDirection(for: id) {
+        if let id = resolveItem(words), let dir = scenario.portalDirection?(self, id) {
             move(dir)
             return
         }
-        // 3. The name of an adjacent room ("enter kitchen").
         if let room = rooms[currentRoomID] {
             for (dir, destinationID) in room.exits {
                 guard let destination = rooms[destinationID] else { continue }
@@ -335,21 +321,6 @@ final class Game {
             }
         }
         emit("Go where?")
-    }
-
-    /// Maps a portal item — one you travel through rather than pick up — to
-    /// the direction that passes through it from the current room.
-    private func portalDirection(for id: String) -> Direction? {
-        switch id {
-        case "window":
-            if currentRoomID == "behindHouse" { return .inside }
-            if currentRoomID == "kitchen" { return .outside }
-            return nil
-        case "trapdoor":
-            return .down
-        default:
-            return nil
-        }
     }
 
     // MARK: Description & Visibility
@@ -383,18 +354,9 @@ final class Game {
         }
         for itemID in room.items {
             guard let item = items[itemID] else { continue }
-            // Fixtures are woven into the room description already.
-            if !item.isTakeable && ["mailbox", "window", "case", "rug", "trapdoor"].contains(itemID) {
-                if itemID == "trapdoor" {
-                    lines.append("A trap door is set into the floor. It is \(item.isOpen ? "open" : "closed").")
-                } else if itemID == "case" {
-                    let contents = item.contents.compactMap { items[$0]?.name }
-                    if contents.isEmpty {
-                        lines.append("The trophy case is \(item.isOpen ? "open and empty" : "closed").")
-                    } else {
-                        lines.append("The trophy case contains: \(contents.joined(separator: ", ")).")
-                    }
-                }
+            if item.isFixture {
+                // Fixtures are woven into the prose; some get a state line.
+                if let line = scenario.fixtureLine?(self, itemID) { lines.append(line) }
                 continue
             }
             lines.append("There is a \(item.name) here.")
@@ -403,15 +365,11 @@ final class Game {
     }
 
     /// A low-spoiler perception command ("what can I see" / "look around").
-    /// Lists the objects visible in the current room and its obvious exits,
-    /// relying on the engine's existing visibility — so genuinely hidden
-    /// things (like the trap door beneath the rug) stay hidden until found.
     private func lookAround() {
         guard canSee else { emit("It's too dark to see anything."); return }
         guard let room = rooms[currentRoomID] else { return }
 
         var lines: [String] = []
-
         var names: [String] = []
         for itemID in room.items {
             guard let item = items[itemID] else { continue }
@@ -432,27 +390,21 @@ final class Game {
         if !exits.isEmpty {
             lines.append("Obvious exits: \(exits.map { $0.rawValue }.joined(separator: ", ")).")
         }
-
         emit(lines.joined(separator: "\n"))
     }
 
-    /// The directions the player could reasonably know they can travel,
-    /// in a stable reading order. Gated passages that haven't been
-    /// discovered yet (the cellar stairs under the rug) are withheld so
-    /// this stays a hint-free perception aid.
+    /// The directions the player could reasonably know they can travel.
     private func obviousExits() -> [Direction] {
         guard let room = rooms[currentRoomID] else { return [] }
         return Direction.allCases.filter { direction in
             guard room.exits[direction] != nil else { return false }
-            if currentRoomID == "livingRoom", direction == .down, !rugMoved { return false }
+            if scenario.exitHidden?(self, direction) == true { return false }
             return true
         }
     }
 
     // MARK: Item Resolution
 
-    /// Finds a visible item matching the given noun words, searching the
-    /// player's inventory and the current room (including open containers).
     private func resolveItem(_ words: [String]) -> String? {
         let candidateIDs = visibleItemIDs()
         for word in words {
@@ -467,14 +419,12 @@ final class Game {
         var ids = inventory
         if let room = rooms[currentRoomID] {
             ids += room.items
-            // Include contents of open containers in the room.
             for itemID in room.items {
                 if let item = items[itemID], item.isContainer, item.isOpen {
                     ids += item.contents
                 }
             }
         }
-        // Include contents of open containers carried by the player.
         for itemID in inventory {
             if let item = items[itemID], item.isContainer, item.isOpen {
                 ids += item.contents
@@ -504,6 +454,9 @@ final class Game {
         if item.isLightSource {
             text += item.isLit ? " It is currently lit." : " It is not lit."
         }
+        if item.forSale {
+            text += " It's for sale for \(item.price) coins."
+        }
         emit(text)
     }
 
@@ -531,13 +484,17 @@ final class Game {
             emit("You're already carrying the \(item.name).")
             return
         }
+        if item.forSale {
+            emit("That's for sale — you'll have to BUY it.")
+            return
+        }
         guard item.isTakeable else {
             emit("You can't take the \(item.name).")
             return
         }
         removeItemFromWorld(id)
         inventory.append(id)
-        if id == "egg" { award(5, "You've found a treasure!") }
+        scenario.onTake?(self, id)
         emit("Taken.")
     }
 
@@ -583,17 +540,7 @@ final class Game {
             emit("You don't see that here.")
             return
         }
-        if id == "rug" {
-            if rugMoved {
-                emit("You've already moved the rug aside.")
-                return
-            }
-            rugMoved = true
-            rooms["livingRoom"]?.items.append("trapdoor")
-            award(2, nil)
-            emit("With a great heave you drag the rug aside, revealing a dusty trap door set into the floor.")
-            return
-        }
+        if scenario.onMoveObject?(self, id) == true { return }
         emit("Moving the \(items[id]?.name ?? "that") accomplishes nothing.")
     }
 
@@ -622,7 +569,6 @@ final class Game {
 
     private func put(_ words: [String]) {
         moves += 1
-        // Split the words around "in"/"into"/"inside"/"on".
         let separators: Set<String> = ["in", "into", "inside", "on"]
         guard let sepIndex = words.firstIndex(where: { separators.contains($0) }) else {
             emit("Put what where? Try \"put egg in case\".")
@@ -651,20 +597,17 @@ final class Game {
         items[targetID] = target
         emit("You place the \(object.name) in the \(target.name).")
 
-        if targetID == "case" && objectID == "egg" {
-            award(10, nil)
-            winGame()
-        }
+        scenario.onPut?(self, objectID, targetID)
     }
 
     /// Give a carried item to a creature. Word order is free ("give fish to
-    /// cat" or "feed cat fish") since the tokenizer strips "to"; roles are
-    /// resolved by matching a visible creature and a carried item.
+    /// cat" or "feed cat fish"); roles are resolved by matching a visible
+    /// creature and a carried item.
     private func give(_ words: [String]) {
         moves += 1
         let visible = visibleItemIDs()
         let recipientID = words.lazy.compactMap { word in
-            visible.first { self.items[$0]?.matches(word) == true && self.creatureIDs.contains($0) }
+            visible.first { self.items[$0]?.matches(word) == true && self.items[$0]?.isCreature == true }
         }.first
         let giftID = words.lazy.compactMap { word in
             self.inventory.first { self.items[$0]?.matches(word) == true }
@@ -679,28 +622,65 @@ final class Game {
             return
         }
 
-        // The stray cat rewards a fish — but only the first time.
-        if recipientID == "cat", giftID == "fish" {
-            if catFed {
-                emit("The cat has already had its fill and just blinks at you contentedly.")
-                return
-            }
-            catFed = true
-            inventory.removeAll { $0 == giftID }
-            award(3, nil)
-            emit("You offer the fish to the stray cat. It gulps the treat down, then winds around your ankles with a rumbling purr. You've made a friend.")
-            return
-        }
-
+        if scenario.onGive?(self, giftID, recipientID) == true { return }
         emit("The \(recipient.name) has no interest in the \(gift.name).")
     }
 
-    private func showInventory() {
-        if inventory.isEmpty {
-            emit("You are empty-handed.")
+    /// Talk to a creature in the room. Scenarios can supply dynamic dialogue
+    /// via `onTalk`; otherwise the creature's default `dialogue` is used.
+    private func talkTo(_ words: [String]) {
+        guard canSee else { emit("It's too dark to see who you'd talk to."); return }
+        let visible = visibleItemIDs()
+        let id = words.lazy.compactMap { word in
+            visible.first { self.items[$0]?.matches(word) == true && self.items[$0]?.isCreature == true }
+        }.first
+        guard let id, let npc = items[id] else {
+            emit("There's no one here to talk to.")
             return
         }
-        let lines = ["You are carrying:"] + inventory.compactMap { items[$0].map { "  a \($0.name)" } }
+        if scenario.onTalk?(self, id) == true { return }
+        if let line = npc.dialogue {
+            emit(line)
+        } else {
+            emit("The \(npc.name) has nothing to say.")
+        }
+    }
+
+    /// Buy a for-sale item in the current shop, spending coins.
+    private func buyItem(_ words: [String]) {
+        moves += 1
+        guard canSee else { emit("It's too dark to shop."); return }
+        guard let id = resolveItem(words), let item = items[id] else {
+            emit("You don't see that here.")
+            return
+        }
+        guard item.forSale else {
+            emit("The \(item.name) isn't for sale.")
+            return
+        }
+        guard coins >= item.price else {
+            emit("You can't afford the \(item.name) — it costs \(item.price) coins and you have \(coins).")
+            return
+        }
+        coins -= item.price
+        var bought = item
+        bought.forSale = false
+        items[id] = bought
+        removeItemFromWorld(id)
+        inventory.append(id)
+        emit("You buy the \(item.name) for \(item.price) coins. You have \(coins) left.")
+    }
+
+    private func showInventory() {
+        var lines: [String] = []
+        if inventory.isEmpty {
+            lines.append("You are empty-handed.")
+        } else {
+            lines = ["You are carrying:"] + inventory.compactMap { items[$0].map { "  a \($0.name)" } }
+        }
+        if scenario.startingCoins > 0 {
+            lines.append("You have \(coins) coins.")
+        }
         emit(lines.joined(separator: "\n"))
     }
 
@@ -708,39 +688,44 @@ final class Game {
 
     private func removeItemFromWorld(_ id: String) {
         rooms[currentRoomID]?.items.removeAll { $0 == id }
-        // Also remove from any container it might live in.
         for (key, var item) in items where item.contents.contains(id) {
             item.contents.removeAll { $0 == id }
             items[key] = item
         }
     }
 
-    private func award(_ points: Int, _ note: String?) {
+    func award(_ points: Int, _ note: String?) {
         score += points
         if let note { emit(note) }
     }
 
-    private func winGame() {
+    /// Ends the game as a win, printing the scenario's closing message
+    /// followed by the standard score footer.
+    func win(_ message: String) {
         isWon = true
         emit("""
 
-        The jeweled egg settles into the trophy case with a soft, satisfying click. Light dances through the glass.
+        \(message)
 
         *** You have won! ***
 
-        Your score is \(score) of a possible \(maxScore), in \(moves) moves.
+        Your score is \(score) of a possible \(scenario.maxScore), in \(moves) moves.
         Type RESTART to play again.
         """)
     }
 
+    func emit(_ text: String, asCommand: Bool = false) {
+        transcript.append(TranscriptEntry(id: nextEntryID, text: text, isCommand: asCommand))
+        nextEntryID += 1
+    }
+
     // MARK: Save & Restore
 
-    private static let saveKey = "skogark.savegame"
+    private var saveKey: String { "skogark.\(scenario.id).savegame" }
 
-    /// True when a saved game exists on disk (used by the UI to enable
-    /// a Restore affordance).
+    /// True when a saved game exists for this scenario.
     var hasSavedGame: Bool {
-        UserDefaults.standard.data(forKey: Self.saveKey) != nil
+        UserDefaults.standard.data(forKey: saveKey) != nil
     }
 
     /// A serializable capture of every piece of mutable game state.
@@ -749,8 +734,8 @@ final class Game {
         var items: [String: Item]
         var inventory: [String]
         var currentRoomID: String
-        var rugMoved: Bool
-        var catFed: Bool?
+        var flags: [String]
+        var coins: Int
         var score: Int
         var moves: Int
         var isWon: Bool
@@ -761,13 +746,13 @@ final class Game {
     private func save() {
         let snapshot = Snapshot(
             rooms: rooms, items: items, inventory: inventory,
-            currentRoomID: currentRoomID, rugMoved: rugMoved, catFed: catFed,
+            currentRoomID: currentRoomID, flags: Array(flags), coins: coins,
             score: score, moves: moves, isWon: isWon,
             transcript: transcript, nextEntryID: nextEntryID
         )
         do {
             let data = try JSONEncoder().encode(snapshot)
-            UserDefaults.standard.set(data, forKey: Self.saveKey)
+            UserDefaults.standard.set(data, forKey: saveKey)
             emit("Game saved.")
         } catch {
             emit("Something went wrong and the game could not be saved.")
@@ -775,7 +760,7 @@ final class Game {
     }
 
     private func restore() {
-        guard let data = UserDefaults.standard.data(forKey: Self.saveKey) else {
+        guard let data = UserDefaults.standard.data(forKey: saveKey) else {
             emit("There is no saved game to restore.")
             return
         }
@@ -785,8 +770,8 @@ final class Game {
             items = snapshot.items
             inventory = snapshot.inventory
             currentRoomID = snapshot.currentRoomID
-            rugMoved = snapshot.rugMoved
-            catFed = snapshot.catFed ?? false
+            flags = Set(snapshot.flags)
+            coins = snapshot.coins
             score = snapshot.score
             moves = snapshot.moves
             isWon = snapshot.isWon
@@ -800,53 +785,354 @@ final class Game {
     }
 
     private func restart() {
-        transcript = []
-        moves = 0
-        score = 0
-        isWon = false
-        inventory = []
-        currentRoomID = "westOfHouse"
-        rugMoved = false
-        catFed = false
-        buildWorld()
-        emit(bannerText, asCommand: false)
-        describeCurrentRoom(force: true)
-    }
-
-    private func emit(_ text: String, asCommand: Bool = false) {
-        transcript.append(TranscriptEntry(id: nextEntryID, text: text, isCommand: asCommand))
-        nextEntryID += 1
+        startFresh(clearTranscript: true)
     }
 
     // MARK: Static Text
 
-    private var bannerText: String {
-        """
-        SKOGARK
-        A tiny text adventure. (c) 2026
-        Type HELP for a list of commands.
-        ─────────────────────────────
-        """
+    private var helpText: String {
+        var lines = [
+            "Some things you can type:",
+            "  Directions: NORTH/N, SOUTH/S, EAST/E, WEST/W, UP/U, DOWN/D, IN, OUT",
+            "  LOOK (L)              — describe your surroundings",
+            "  LOOK AROUND           — list what you can see here, and the exits",
+            "  EXAMINE <thing> (X)   — inspect something",
+            "  READ <thing>          — read something",
+            "  TALK TO <someone>     — speak with a person",
+            "  TAKE / DROP <thing>   — pick up or set down an item",
+            "  OPEN / CLOSE <thing>  — for doors, windows, containers",
+            "  MOVE <thing>          — shift a heavy object",
+            "  TURN ON / OFF LAMP    — control a light source",
+            "  PUT <thing> IN <thing>— place an item in a container",
+            "  GIVE <thing> TO <someone> — offer an item",
+        ]
+        if scenario.startingCoins > 0 {
+            lines.append("  BUY <thing>           — purchase goods in a shop")
+            lines.append("  COINS                 — check your money")
+        }
+        lines += [
+            "  INVENTORY (I)         — list what you're carrying",
+            "  SCORE                 — check your progress",
+            "  SAVE / RESTORE        — save or reload your game",
+            "  RESTART               — start over",
+        ]
+        return lines.joined(separator: "\n")
+    }
+}
+
+// MARK: - Scenarios
+
+extension Game {
+
+    /// The original adventure: explore the white house and its caverns,
+    /// get the jeweled egg into the trophy case, and visit the village.
+    static func houseScenario() -> Scenario {
+        Scenario(
+            id: "house",
+            title: "Explore a House",
+            blurb: "Explore a house and the caverns beneath it in search of treasure. Beware the grue.",
+            banner: """
+            SKOGARK
+            A tiny text adventure. (c) 2026
+            Type HELP for a list of commands.
+            ─────────────────────────────
+            """,
+            startRoomID: "westOfHouse",
+            maxScore: 25,
+            startingCoins: 0,
+            build: buildHouseWorld,
+            portalGate: { game, direction in
+                if direction == .inside, game.roomID == "behindHouse",
+                   game.item("window")?.isOpen != true {
+                    return "The window is closed. You'll need to open it first."
+                }
+                if direction == .down, game.roomID == "livingRoom" {
+                    if !game.has(flag: "rugMoved") { return "You can't go that way." }
+                    if game.item("trapdoor")?.isOpen != true { return "The trap door is closed." }
+                }
+                return nil
+            },
+            portalDirection: { game, id in
+                if id == "window" {
+                    if game.roomID == "behindHouse" { return .inside }
+                    if game.roomID == "kitchen" { return .outside }
+                    return nil
+                }
+                if id == "trapdoor" { return .down }
+                return nil
+            },
+            exitHidden: { game, direction in
+                game.roomID == "livingRoom" && direction == .down && !game.has(flag: "rugMoved")
+            },
+            fixtureLine: { game, id in
+                guard let item = game.item(id) else { return nil }
+                switch id {
+                case "trapdoor":
+                    return "A trap door is set into the floor. It is \(item.isOpen ? "open" : "closed")."
+                case "case":
+                    let contents = item.contents.compactMap { game.item($0)?.name }
+                    return contents.isEmpty
+                        ? "The trophy case is \(item.isOpen ? "open and empty" : "closed")."
+                        : "The trophy case contains: \(contents.joined(separator: ", "))."
+                default:
+                    return nil // mailbox, window, rug — woven into prose
+                }
+            },
+            onTake: { game, id in
+                if id == "egg" { game.award(5, "You've found a treasure!") }
+            },
+            onMoveObject: { game, id in
+                guard id == "rug" else { return false }
+                if game.has(flag: "rugMoved") {
+                    game.emit("You've already moved the rug aside.")
+                    return true
+                }
+                game.set(flag: "rugMoved")
+                game.revealItem("trapdoor", inRoom: "livingRoom")
+                game.award(2, nil)
+                game.emit("With a great heave you drag the rug aside, revealing a dusty trap door set into the floor.")
+                return true
+            },
+            onGive: { game, gift, recipient in
+                guard recipient == "cat", gift == "fish" else { return false }
+                if game.has(flag: "catFed") {
+                    game.emit("The cat has already had its fill and just blinks at you contentedly.")
+                    return true
+                }
+                game.set(flag: "catFed")
+                game.consumeFromInventory(gift)
+                game.award(3, nil)
+                game.emit("You offer the fish to the stray cat. It gulps the treat down, then winds around your ankles with a rumbling purr. You've made a friend.")
+                return true
+            },
+            onPut: { game, object, target in
+                if target == "case", object == "egg" {
+                    game.award(10, nil)
+                    game.win("The jeweled egg settles into the trophy case with a soft, satisfying click. Light dances through the glass.")
+                }
+            }
+        )
     }
 
-    private var helpText: String {
-        """
-        Some things you can type:
-          Directions: NORTH/N, SOUTH/S, EAST/E, WEST/W, UP/U, DOWN/D, IN, OUT
-          LOOK (L)              — describe your surroundings
-          LOOK AROUND           — list what you can see here, and the exits
-          EXAMINE <thing> (X)   — inspect something
-          READ <thing>          — read something
-          TAKE / DROP <thing>   — pick up or set down an item
-          OPEN / CLOSE <thing>  — for doors, windows, containers
-          MOVE <thing>          — shift a heavy object
-          TURN ON / OFF LAMP    — control a light source
-          PUT <thing> IN <thing>— place an item in a container
-          GIVE <thing> TO <someone> — offer an item to a creature
-          INVENTORY (I)         — list what you're carrying
-          SCORE                 — check your progress
-          SAVE / RESTORE        — save or reload your game
-          RESTART               — start over
-        """
+    /// The town errand: the inn's cook sends you out with a purse to buy a
+    /// cut of meat, a loaf of bread, and a fresh fish, then bring them back.
+    static func townScenario() -> Scenario {
+        Scenario(
+            id: "town",
+            title: "Explore the Town",
+            blurb: "The cook needs supplies for a feast. Shop the village with a purse of coins and deliver the goods.",
+            banner: """
+            MARKET ERRAND
+            A tiny SkoGarK tale. (c) 2026
+            Type HELP for commands, and READ LIST for your task.
+            ─────────────────────────────
+            """,
+            startRoomID: "innKitchen",
+            maxScore: 15,
+            startingCoins: 25,
+            build: buildTownWorld,
+            fixtureLine: { game, id in
+                guard let item = game.item(id) else { return nil }
+                if item.forSale {
+                    let name = item.name.prefix(1).uppercased() + item.name.dropFirst()
+                    return "\(name) is on offer here — \(item.price) coins."
+                }
+                if item.isCreature {
+                    switch id {
+                    case "cook": return "The cook waits by the hearth for her supplies."
+                    case "butcherman": return "A burly butcher stands behind the counter."
+                    case "baker": return "A cheerful baker dusts flour from her hands."
+                    case "fishwife": return "A brisk fishwife tends her glistening stall."
+                    default: return nil
+                    }
+                }
+                return nil
+            },
+            onGive: { game, gift, recipient in
+                guard recipient == "cook" else { return false }
+                let goods = ["meat", "bread", "fish"]
+                guard goods.contains(gift) else {
+                    game.emit("The cook chuckles. \"That's not on my list, friend.\"")
+                    return true
+                }
+                game.consumeFromInventory(gift)
+                game.set(flag: "delivered_\(gift)")
+                game.award(5, nil)
+                let deliveredCount = goods.filter { game.has(flag: "delivered_\($0)") }.count
+                if deliveredCount == goods.count {
+                    game.win("The cook beams as you hand over the last of the shopping. \"A feast fit for the whole village — thank you, and keep the change!\"")
+                } else {
+                    let name = game.item(gift)?.name ?? "goods"
+                    game.emit("The cook takes the \(name) with a grateful nod. (\(deliveredCount) of \(goods.count) delivered.)")
+                }
+                return true
+            },
+            onTalk: { game, id in
+                guard id == "cook" else { return false }
+                let goods = ["meat", "bread", "fish"]
+                let remaining = goods
+                    .filter { !game.has(flag: "delivered_\($0)") }
+                    .compactMap { game.item($0)?.name }
+                if remaining.isEmpty {
+                    game.emit("\"You've brought everything — bless you!\" the cook says.")
+                } else {
+                    game.emit("\"I still need: \(remaining.joined(separator: ", ")). Buy them from the shops around the square and bring them back to me. Mind your coins!\" the cook says.")
+                }
+                return true
+            }
+        )
     }
+
+    // Small mutators the scenario hooks lean on.
+    fileprivate func revealItem(_ id: String, inRoom roomID: String) {
+        rooms[roomID]?.items.append(id)
+    }
+    fileprivate func consumeFromInventory(_ id: String) {
+        inventory.removeAll { $0 == id }
+    }
+}
+
+// MARK: - World Builders
+
+private func buildHouseWorld() -> (rooms: [String: Room], items: [String: Item]) {
+    var items: [String: Item] = [:]
+    func add(_ item: Item) { items[item.id] = item }
+
+    add(Item(id: "leaflet", name: "leaflet", nouns: ["leaflet", "paper", "mail"],
+             description: "A small paper leaflet.", isTakeable: true,
+             readText: "\"WELCOME TO SKOGARK!\n\nSkoGarK is a game of adventure and low cunning. In it you will explore a house and the caverns beneath it in search of treasure. Beware the grue — it lurks in darkness. Type HELP if you get stuck.\""))
+    add(Item(id: "mailbox", name: "small mailbox", nouns: ["mailbox", "box"],
+             description: "It's a small mailbox.", isOpenable: true, isContainer: true,
+             contents: ["leaflet"], isFixture: true))
+    add(Item(id: "window", name: "window", nouns: ["window"],
+             description: "The kitchen window is slightly ajar.", isOpenable: true, isFixture: true))
+    add(Item(id: "lantern", name: "brass lantern", nouns: ["lantern", "lamp", "light"],
+             description: "A battered brass lantern.", isTakeable: true, isLightSource: true))
+    add(Item(id: "bottle", name: "glass bottle", nouns: ["bottle", "water"],
+             description: "A glass bottle containing a little water.", isTakeable: true))
+    add(Item(id: "rug", name: "oriental rug", nouns: ["rug", "carpet"],
+             description: "A large oriental rug in the center of the room.", isFixture: true))
+    add(Item(id: "trapdoor", name: "trap door", nouns: ["trapdoor", "trap", "door", "hatch"],
+             description: "A closed wooden trap door in the floor.", isOpenable: true, isFixture: true))
+    add(Item(id: "case", name: "trophy case", nouns: ["case", "trophy"],
+             description: "A handsome glass trophy case, waiting to be filled.",
+             isOpenable: true, isContainer: true, isFixture: true))
+    add(Item(id: "egg", name: "jeweled egg", nouns: ["egg", "jewel", "treasure"],
+             description: "A stunning jeweled egg that glitters even in faint light.",
+             isTakeable: true))
+    add(Item(id: "fish", name: "fresh fish", nouns: ["fish", "herring", "catch"],
+             description: "A fat, silver fish fresh from the stall, still glistening.",
+             isTakeable: true))
+    add(Item(id: "cat", name: "stray cat", nouns: ["cat", "kitten", "stray"],
+             description: "A scruffy stray cat with matted fur, watching the fishmonger's stall with hungry, hopeful eyes.",
+             isCreature: true, dialogue: "The stray cat regards you with lofty indifference."))
+
+    var rooms: [String: Room] = [:]
+    func add(_ room: Room) { rooms[room.id] = room }
+
+    add(Room(id: "westOfHouse", title: "West of House",
+             description: "You are standing in an open field west of a white house, with a boarded front door. A small mailbox stands here.",
+             exits: [.east: "behindHouse", .north: "behindHouse"],
+             items: ["mailbox"]))
+    add(Room(id: "behindHouse", title: "Behind House",
+             description: "You are behind the white house. A path leads into the forest to the east. One window into the kitchen is slightly ajar.",
+             exits: [.west: "westOfHouse", .inside: "kitchen", .east: "forestPath"],
+             items: ["window"]))
+    add(Room(id: "kitchen", title: "Kitchen",
+             description: "You are in the kitchen of the white house. A table sits in the middle of the room. A passage leads west, and a dark staircase leads up. To the east, a window opens onto the yard.",
+             exits: [.west: "livingRoom", .outside: "behindHouse", .east: "behindHouse"],
+             items: ["lantern", "bottle"]))
+    add(Room(id: "livingRoom", title: "Living Room",
+             description: "You are in the living room. There is a trophy case here, and a large oriental rug lies in the center of the floor. A doorway leads east to the kitchen.",
+             exits: [.east: "kitchen", .down: "cellar"],
+             items: ["case", "rug"]))
+    add(Room(id: "cellar", title: "Cellar",
+             description: "You are in a damp, cramped cellar carved from the rock. A rickety staircase leads up toward the living room.",
+             exits: [.up: "livingRoom"],
+             items: ["egg"], isDark: true))
+
+    // The village, reached along the forest path east of the house.
+    add(Room(id: "forestPath", title: "Forest Path",
+             description: "A narrow dirt path winds through cool, whispering pines. The white house lies back to the west, while ahead to the east the trees thin toward the rooftops of a village.",
+             exits: [.west: "behindHouse", .east: "villageSquare"]))
+    add(Room(id: "villageSquare", title: "Village Square",
+             description: "You stand on the cobbles at the heart of a small village. Shops crowd the edges: a butcher to the north and a bakery to the south. A lane leads east toward the market, and the forest path returns west toward the house.",
+             exits: [.west: "forestPath", .north: "butcher", .south: "bakery", .east: "marketRow"]))
+    add(Room(id: "marketRow", title: "Market Row",
+             description: "A bustling market row, hemmed in by timber-framed storefronts. A fishmonger's stall stands to the north and a blacksmith's forge glows to the south. The village square lies back to the west.",
+             exits: [.west: "villageSquare", .north: "fishmonger", .south: "blacksmith"],
+             items: ["cat"]))
+    add(Room(id: "butcher", title: "The Butcher",
+             description: "The butcher's shop smells of sawdust and cold iron. Cuts of meat hang from steel hooks while a broad-shouldered butcher wipes his hands on a striped apron. The square is back to the south.",
+             exits: [.south: "villageSquare"]))
+    add(Room(id: "bakery", title: "The Bakery",
+             description: "Warm air and the scent of fresh bread fill the bakery. Loaves and pastries are stacked on wooden shelves, and a flour-dusted baker nods you a greeting. The square lies north.",
+             exits: [.north: "villageSquare"]))
+    add(Room(id: "fishmonger", title: "The Fishmonger",
+             description: "The fishmonger's stall glistens with the day's catch laid out on crushed ice. A brisk woman in oilskins calls her prices to no one in particular. Market row is back to the south.",
+             exits: [.south: "marketRow"],
+             items: ["fish"]))
+    add(Room(id: "blacksmith", title: "The Blacksmith",
+             description: "Heat rolls off the blacksmith's forge, and the ring of hammer on anvil fills the air. A soot-streaked smith pauses, tongs in hand, to size you up. Market row lies north.",
+             exits: [.north: "marketRow"]))
+
+    return (rooms, items)
+}
+
+private func buildTownWorld() -> (rooms: [String: Room], items: [String: Item]) {
+    var items: [String: Item] = [:]
+    func add(_ item: Item) { items[item.id] = item }
+
+    add(Item(id: "list", name: "shopping list", nouns: ["list", "note", "paper"],
+             description: "The cook's shopping list, in a hurried scrawl.", isTakeable: true,
+             readText: "\"FEAST SHOPPING\n  • a cut of meat — from the butcher\n  • a loaf of bread — from the bakery\n  • a fresh fish — from the fishmonger\nBring them all back to me. Here's your purse. — Cook\""))
+    add(Item(id: "cook", name: "cook", nouns: ["cook", "innkeeper", "woman"],
+             description: "The inn's cook, rosy-cheeked and flour-dusted, waiting for her supplies.",
+             isFixture: true, isCreature: true))
+    add(Item(id: "meat", name: "cut of meat", nouns: ["meat", "beef", "cut"],
+             description: "A good red cut, trimmed and ready.",
+             isTakeable: true, isFixture: true, forSale: true, price: 8))
+    add(Item(id: "bread", name: "loaf of bread", nouns: ["bread", "loaf"],
+             description: "A crusty loaf, still warm from the oven.",
+             isTakeable: true, isFixture: true, forSale: true, price: 5))
+    add(Item(id: "fish", name: "fresh fish", nouns: ["fish", "herring", "catch"],
+             description: "A silvery fish laid out on crushed ice.",
+             isTakeable: true, isFixture: true, forSale: true, price: 6))
+    add(Item(id: "butcherman", name: "butcher", nouns: ["butcher", "man"],
+             description: "A burly butcher in a striped apron.",
+             isFixture: true, isCreature: true,
+             dialogue: "\"Finest cuts in the village,\" the butcher grunts. \"Eight coins and that one's yours — just say BUY MEAT.\""))
+    add(Item(id: "baker", name: "baker", nouns: ["baker"],
+             description: "A cheerful baker, sleeves rolled and dusted with flour.",
+             isFixture: true, isCreature: true,
+             dialogue: "\"Fresh from the oven!\" the baker beams. \"Five coins a loaf — BUY BREAD whenever you like.\""))
+    add(Item(id: "fishwife", name: "fishwife", nouns: ["fishwife", "fishmonger", "woman"],
+             description: "A brisk fishwife in oilskins.",
+             isFixture: true, isCreature: true,
+             dialogue: "\"Caught this very morning,\" says the fishwife. \"Six coins — BUY FISH and it's yours.\""))
+
+    var rooms: [String: Room] = [:]
+    func add(_ room: Room) { rooms[room.id] = room }
+
+    add(Room(id: "innKitchen", title: "The Inn Kitchen",
+             description: "You're in the warm kitchen of the village inn. The cook has sent you out for tonight's feast — a shopping list lies on the table, and a purse of coins is already in your pocket. The square is just outside to the north.",
+             exits: [.north: "square"],
+             items: ["list", "cook"]))
+    add(Room(id: "square", title: "Village Square",
+             description: "The cobbled square, ringed with shops. The butcher is to the east, the bakery to the west, and the fishmonger to the north. The inn's kitchen is back to the south.",
+             exits: [.south: "innKitchen", .east: "townButcher", .west: "townBakery", .north: "townFish"]))
+    add(Room(id: "townButcher", title: "The Butcher",
+             description: "Cuts of meat hang from steel hooks, and a broad-shouldered butcher stands ready behind the counter. The square is back to the west.",
+             exits: [.west: "square"],
+             items: ["meat", "butcherman"]))
+    add(Room(id: "townBakery", title: "The Bakery",
+             description: "Shelves of loaves and pastries fill the warm little bakery. The square lies east.",
+             exits: [.east: "square"],
+             items: ["bread", "baker"]))
+    add(Room(id: "townFish", title: "The Fishmonger",
+             description: "The day's catch glistens on crushed ice while the fishwife calls her prices. The square is back to the south.",
+             exits: [.south: "square"],
+             items: ["fish", "fishwife"]))
+
+    return (rooms, items)
 }
