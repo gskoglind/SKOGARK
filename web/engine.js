@@ -55,6 +55,8 @@ class Game {
         this.coins = 0;
         this.nextEntryID = 0;
         this.nextPurchaseID = 0;
+        this.hintLevel = 0;
+        this.hintStageKey = "";
         this.startFresh(false);
     }
 
@@ -67,6 +69,8 @@ class Game {
         this.flags = new Set();
         this.coins = this.scenario.startingCoins;
         this.nextPurchaseID = 0;
+        this.hintLevel = 0;
+        this.hintStageKey = "";
         const world = this.scenario.build();
         this.rooms = world.rooms;
         this.items = world.items;
@@ -80,6 +84,11 @@ class Game {
     get roomID() { return this.currentRoomID; }
     has(flag) { return this.flags.has(flag); }
     set(flag) { this.flags.add(flag); }
+    inventoryKinds() {
+        const kinds = new Set();
+        for (const id of this.inventory) if (this.items[id] && this.items[id].kind) kinds.add(this.items[id].kind);
+        return kinds;
+    }
     consumeFromInventory(id) { this.inventory = this.inventory.filter((x) => x !== id); }
     revealItem(id, roomID) { if (this.rooms[roomID]) this.rooms[roomID].items.push(id); }
 
@@ -165,6 +174,9 @@ class Game {
                 break;
             case "score":
                 this.emit(`Your score is ${this.score} of a possible ${this.scenario.maxScore}, in ${this.moves} moves.`);
+                break;
+            case "hint": case "hints":
+                this.showHint();
                 break;
             case "why":
                 this.emit("Why not? Adventure rarely waits for a reason. Type HELP if you're stuck.");
@@ -531,6 +543,30 @@ class Game {
         this.emit(`You buy the ${ware.name} for ${ware.price} coins. You have ${this.coins} left.`);
     }
 
+    // Progressive, opt-in hint. Each call escalates from a gentle nudge to an
+    // explicit instruction; the level resets when the player reaches a new
+    // puzzle stage.
+    showHint() {
+        if (!this.scenario.hintStage) {
+            this.emit("No hints are available here — you're on your own!");
+            return;
+        }
+        const stage = this.scenario.hintStage(this);
+        if (stage.key !== this.hintStageKey) {
+            this.hintStageKey = stage.key;
+            this.hintLevel = 0;
+        }
+        const clues = stage.clues;
+        if (!clues || clues.length === 0) { this.emit("No hint right now."); return; }
+        const index = Math.min(this.hintLevel, clues.length - 1);
+        let output = clues[index];
+        if (this.hintLevel < clues.length - 1) {
+            output += "\n(Type HINT again for a bigger hint.)";
+            this.hintLevel += 1;
+        }
+        this.emit(output);
+    }
+
     showInventory() {
         const lines = [];
         if (this.inventory.length === 0) {
@@ -644,6 +680,7 @@ class Game {
         lines.push(
             "  INVENTORY (I)         — list what you're carrying",
             "  SCORE                 — check your progress",
+            "  HINT                  — a nudge toward your next step",
             "  SAVE / RESTORE        — save or reload your game",
             "  RESTART               — start over"
         );
@@ -732,6 +769,45 @@ function houseScenario() {
                 game.win("The jeweled egg settles into the trophy case with a soft, satisfying click. Light dances through the glass.");
             }
         },
+        hintStage(game) {
+            if (game.item("case") && game.item("case").contents.includes("egg")) {
+                return { key: "done", clues: ["The egg is in the case — you've done it!"] };
+            }
+            if (!(game.item("window") && game.item("window").isOpen)) {
+                return { key: "enter", clues: [
+                    "The house looks sealed from the front — try looking around the back.",
+                    "Behind the house a window is ajar: OPEN WINDOW, then go IN.",
+                ] };
+            }
+            if (!(game.item("lantern") && game.item("lantern").isLit)) {
+                return { key: "light", clues: [
+                    "It's pitch dark underground, and a grue lurks there. You'll want a light before you descend.",
+                    "There's a brass lantern in the kitchen — TAKE LANTERN, then TURN ON LANTERN.",
+                ] };
+            }
+            if (!game.has("rugMoved")) {
+                return { key: "rug", clues: [
+                    "The living room hides a way down; something on the floor is in the way.",
+                    "MOVE the RUG to uncover a trap door.",
+                ] };
+            }
+            if (!(game.item("trapdoor") && game.item("trapdoor").isOpen)) {
+                return { key: "trap", clues: [
+                    "You've found the trap door — but it's no use to you closed.",
+                    "OPEN the TRAP DOOR, then go DOWN.",
+                ] };
+            }
+            if (!game.isCarrying("egg")) {
+                return { key: "egg", clues: [
+                    "The treasure lies in the darkness below.",
+                    "Go DOWN into the cellar (lantern lit!) and TAKE the EGG.",
+                ] };
+            }
+            return { key: "deliver", clues: [
+                "You have the treasure — now it needs a home.",
+                "Return to the living room, OPEN CASE, and PUT EGG IN CASE.",
+            ] };
+        },
     };
 }
 
@@ -819,6 +895,35 @@ function townScenario() {
                 game.emit(`"I still need: ${remaining.join(", ")}. Buy them from the shops around the square and bring them back to me. Mind your coins!" the cook says.`);
             }
             return true;
+        },
+        hintStage(game) {
+            const goods = [
+                { kind: "meat", name: "cut of meat", shop: "the butcher (east of the square)" },
+                { kind: "bread", name: "loaf of bread", shop: "the bakery (west of the square)" },
+                { kind: "fish", name: "fresh fish", shop: "the fishmonger (north of the square)" },
+            ];
+            const needed = goods.filter((g) => !game.has(`delivered_${g.kind}`));
+            if (needed.length === 0) {
+                return { key: "done", clues: ["You've delivered everything the cook wanted!"] };
+            }
+            const carried = game.inventoryKinds();
+            const toBuy = needed.filter((g) => !carried.has(g.kind));
+            const key = "left:" + needed.map((g) => g.kind).join(",") +
+                "|buy:" + toBuy.map((g) => g.kind).join(",");
+
+            const clues = [];
+            clues.push(`The cook still needs: ${needed.map((g) => g.name).join(", ")}. (Try READ LIST or TALK TO COOK.)`);
+            if (toBuy.length === 0) {
+                clues.push("You've bought what's left — head back to the inn (south of the square) and GIVE each item TO COOK.");
+            } else {
+                clues.push(`Where to shop: ${toBuy.map((g) => `${g.name} at ${g.shop}`).join("; ")}.`);
+            }
+            let finalClue = "BUY each item (mind your 25 coins), then return to the inn and GIVE <item> TO COOK.";
+            if (!game.has("catFed")) {
+                finalClue += " Bonus: a spare fish pleases the stray cat by the fishmonger (+5).";
+            }
+            clues.push(finalClue);
+            return { key: key, clues: clues };
         },
     };
 }

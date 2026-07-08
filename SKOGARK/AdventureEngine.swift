@@ -122,6 +122,9 @@ struct Scenario: Identifiable {
     var onPut: ((Game, _ object: String, _ target: String) -> Void)? = nil
     /// Handles TALK to a creature; return true if handled.
     var onTalk: ((Game, String) -> Bool)? = nil
+    /// Progressive, context-aware hints: returns the current puzzle-stage key
+    /// and its escalating clues (gentle → explicit) for the HINT command.
+    var hintStage: ((Game) -> (key: String, clues: [String]))? = nil
 }
 
 // MARK: - Transcript
@@ -158,6 +161,8 @@ final class Game {
     private var coins = 0
     private var nextEntryID = 0
     private var nextPurchaseID = 0
+    private var hintLevel = 0
+    private var hintStageKey = ""
 
     /// All playable scenarios, for the selection menu.
     static let scenarios: [Scenario] = [houseScenario(), townScenario()]
@@ -179,6 +184,8 @@ final class Game {
         flags = []
         coins = scenario.startingCoins
         nextPurchaseID = 0
+        hintLevel = 0
+        hintStageKey = ""
         let world = scenario.build()
         rooms = world.rooms
         items = world.items
@@ -193,6 +200,7 @@ final class Game {
     var roomID: String { currentRoomID }
     func has(flag: String) -> Bool { flags.contains(flag) }
     func set(flag: String) { flags.insert(flag) }
+    func inventoryKinds() -> Set<String> { Set(inventory.compactMap { items[$0]?.kind }) }
     var purse: Int { coins }
     func isCarrying(_ id: String) -> Bool { inventory.contains(id) }
 
@@ -268,6 +276,8 @@ final class Game {
             showInventory()
         case "score":
             emit("Your score is \(score) of a possible \(scenario.maxScore), in \(moves) moves.")
+        case "hint", "hints":
+            showHint()
         case "why":
             emit("Why not? Adventure rarely waits for a reason. Type HELP if you're stuck.")
         case "help", "?":
@@ -693,6 +703,29 @@ final class Game {
         emit("You buy the \(ware.name) for \(ware.price) coins. You have \(coins) left.")
     }
 
+    /// Progressive, opt-in hint. Each call escalates from a gentle nudge to
+    /// an explicit instruction; the level resets automatically whenever the
+    /// player advances to a new puzzle stage.
+    private func showHint() {
+        guard let stage = scenario.hintStage?(self) else {
+            emit("No hints are available here — you're on your own!")
+            return
+        }
+        if stage.key != hintStageKey {
+            hintStageKey = stage.key
+            hintLevel = 0
+        }
+        let clues = stage.clues
+        guard !clues.isEmpty else { emit("No hint right now."); return }
+        let index = min(hintLevel, clues.count - 1)
+        var output = clues[index]
+        if hintLevel < clues.count - 1 {
+            output += "\n(Type HINT again for a bigger hint.)"
+            hintLevel += 1
+        }
+        emit(output)
+    }
+
     private func showInventory() {
         var lines: [String] = []
         if inventory.isEmpty {
@@ -838,6 +871,7 @@ final class Game {
         lines += [
             "  INVENTORY (I)         — list what you're carrying",
             "  SCORE                 — check your progress",
+            "  HINT                  — a nudge toward your next step",
             "  SAVE / RESTORE        — save or reload your game",
             "  RESTART               — start over",
         ]
@@ -935,6 +969,45 @@ extension Game {
                     game.award(10, nil)
                     game.win("The jeweled egg settles into the trophy case with a soft, satisfying click. Light dances through the glass.")
                 }
+            },
+            hintStage: { game in
+                if game.item("case")?.contents.contains("egg") == true {
+                    return (key: "done", clues: ["The egg is in the case — you've done it!"])
+                }
+                if game.item("window")?.isOpen != true {
+                    return (key: "enter", clues: [
+                        "The house looks sealed from the front — try looking around the back.",
+                        "Behind the house a window is ajar: OPEN WINDOW, then go IN.",
+                    ])
+                }
+                if game.item("lantern")?.isLit != true {
+                    return (key: "light", clues: [
+                        "It's pitch dark underground, and a grue lurks there. You'll want a light before you descend.",
+                        "There's a brass lantern in the kitchen — TAKE LANTERN, then TURN ON LANTERN.",
+                    ])
+                }
+                if !game.has(flag: "rugMoved") {
+                    return (key: "rug", clues: [
+                        "The living room hides a way down; something on the floor is in the way.",
+                        "MOVE the RUG to uncover a trap door.",
+                    ])
+                }
+                if game.item("trapdoor")?.isOpen != true {
+                    return (key: "trap", clues: [
+                        "You've found the trap door — but it's no use to you closed.",
+                        "OPEN the TRAP DOOR, then go DOWN.",
+                    ])
+                }
+                if !game.isCarrying("egg") {
+                    return (key: "egg", clues: [
+                        "The treasure lies in the darkness below.",
+                        "Go DOWN into the cellar (lantern lit!) and TAKE the EGG.",
+                    ])
+                }
+                return (key: "deliver", clues: [
+                    "You have the treasure — now it needs a home.",
+                    "Return to the living room, OPEN CASE, and PUT EGG IN CASE.",
+                ])
             }
         )
     }
@@ -1021,6 +1094,35 @@ extension Game {
                     game.emit("\"I still need: \(remaining.joined(separator: ", ")). Buy them from the shops around the square and bring them back to me. Mind your coins!\" the cook says.")
                 }
                 return true
+            },
+            hintStage: { game in
+                let goods = [
+                    (kind: "meat", name: "cut of meat", shop: "the butcher (east of the square)"),
+                    (kind: "bread", name: "loaf of bread", shop: "the bakery (west of the square)"),
+                    (kind: "fish", name: "fresh fish", shop: "the fishmonger (north of the square)"),
+                ]
+                let needed = goods.filter { !game.has(flag: "delivered_\($0.kind)") }
+                if needed.isEmpty {
+                    return (key: "done", clues: ["You've delivered everything the cook wanted!"])
+                }
+                let carried = game.inventoryKinds()
+                let toBuy = needed.filter { !carried.contains($0.kind) }
+                let key = "left:" + needed.map { $0.kind }.joined(separator: ",")
+                    + "|buy:" + toBuy.map { $0.kind }.joined(separator: ",")
+
+                var clues: [String] = []
+                clues.append("The cook still needs: \(needed.map { $0.name }.joined(separator: ", ")). (Try READ LIST or TALK TO COOK.)")
+                if toBuy.isEmpty {
+                    clues.append("You've bought what's left — head back to the inn (south of the square) and GIVE each item TO COOK.")
+                } else {
+                    clues.append("Where to shop: \(toBuy.map { "\($0.name) at \($0.shop)" }.joined(separator: "; ")).")
+                }
+                var finalClue = "BUY each item (mind your 25 coins), then return to the inn and GIVE <item> TO COOK."
+                if !game.has(flag: "catFed") {
+                    finalClue += " Bonus: a spare fish pleases the stray cat by the fishmonger (+5)."
+                }
+                clues.append(finalClue)
+                return (key: key, clues: clues)
             }
         )
     }
