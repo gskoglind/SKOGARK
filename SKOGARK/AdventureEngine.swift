@@ -198,6 +198,8 @@ final class Game {
 
     func item(_ id: String) -> Item? { items[id] }
     var roomID: String { currentRoomID }
+    /// The display title of the room the player is currently in.
+    var roomTitle: String { rooms[currentRoomID]?.title ?? "" }
     func has(flag: String) -> Bool { flags.contains(flag) }
     func set(flag: String) { flags.insert(flag) }
     func inventoryKinds() -> Set<String> { Set(inventory.compactMap { items[$0]?.kind }) }

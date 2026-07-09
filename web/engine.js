@@ -82,6 +82,7 @@ class Game {
     // Scenario-facing helpers (used by rule hooks).
     item(id) { return this.items[id]; }
     get roomID() { return this.currentRoomID; }
+    get roomTitle() { const r = this.rooms[this.currentRoomID]; return r ? r.title : ""; }
     has(flag) { return this.flags.has(flag); }
     set(flag) { this.flags.add(flag); }
     inventoryKinds() {

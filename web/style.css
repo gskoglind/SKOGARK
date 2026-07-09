@@ -16,6 +16,8 @@ body {
 }
 
 #app {
+    position: relative;
+    z-index: 1;   /* sits above the full-bleed #scene backdrop */
     display: flex;
     flex-direction: column;
     /* dvh keeps the layout correct as the mobile keyboard resizes the viewport. */
@@ -23,6 +25,36 @@ body {
     height: 100dvh;
     max-width: 900px;
     margin: 0 auto;
+}
+
+/* ---- Scene backdrop (full-bleed location artwork) ---- */
+
+#scene {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background: #000;   /* fallback when a room has no art */
+    pointer-events: none;
+}
+
+.scene-layer {
+    position: absolute;
+    inset: 0;
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+
+.scene-layer.visible { opacity: 1; }
+
+#sceneScrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom,
+        rgba(0, 0, 0, 0.35),
+        rgba(0, 0, 0, 0.75));
 }
 
 /* ---- Menu ---- */
@@ -96,6 +128,7 @@ body {
 /* ---- Game ---- */
 
 #game {
+    position: relative;   /* anchors the location flash and cat sprite */
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
@@ -108,7 +141,7 @@ body {
     gap: 12px;
     padding: 8px 16px;
     border-bottom: 1px solid #222;
-    background: #000;
+    background: rgba(0, 0, 0, 0.55);   /* translucent so artwork shows behind */
 }
 
 #menuButton {
@@ -153,7 +186,7 @@ body {
     padding: 12px 16px;
     padding-bottom: calc(12px + env(safe-area-inset-bottom));
     border-top: 1px solid #222;
-    background: #000;
+    background: rgba(0, 0, 0, 0.55);   /* translucent so artwork shows behind */
 }
 
 .prompt {
@@ -191,3 +224,45 @@ button[type="submit"]:disabled {
     opacity: 0.4;
     cursor: default;
 }
+
+/* ---- Arrival location card ---- */
+
+#locationFlash {
+    position: absolute;
+    top: 56px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 80%;
+    padding: 12px 22px;
+    border: 1px solid rgba(74, 222, 128, 0.5);
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #4ade80;
+    font-size: 20px;
+    font-weight: 700;
+    text-align: center;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+
+#locationFlash.show { opacity: 1; }
+
+/* ---- Fishmonger's stray cat ---- */
+
+#catSprite {
+    position: absolute;
+    right: 20px;
+    bottom: 84px;
+    width: 150px;
+    height: 170px;
+    background-position: bottom right;
+    background-size: contain;
+    background-repeat: no-repeat;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+
+#catSprite.visible { opacity: 1; }

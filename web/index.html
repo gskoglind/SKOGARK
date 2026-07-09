@@ -9,6 +9,14 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Full-bleed location artwork behind the terminal. Two layers cross-fade
+         on room change; the scrim keeps the monospaced text legible. -->
+    <div id="scene" aria-hidden="true">
+        <div class="scene-layer" id="sceneA"></div>
+        <div class="scene-layer" id="sceneB"></div>
+        <div id="sceneScrim"></div>
+    </div>
+
     <main id="app">
         <section id="menu">
             <h1>SKOGARK</h1>
@@ -30,6 +38,10 @@
                        spellcheck="false" enterkeyhint="send" aria-label="Enter a command">
                 <button type="submit">Go</button>
             </form>
+
+            <!-- Arrival location card (top) and the fishmonger's stray cat. -->
+            <div id="locationFlash" aria-hidden="true"></div>
+            <div id="catSprite" aria-hidden="true"></div>
         </section>
     </main>
 

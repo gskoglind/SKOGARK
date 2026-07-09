@@ -16,9 +16,40 @@
     const goButton = form.querySelector("button[type=submit]");
     const menuButton = document.getElementById("menuButton");
     const gameTitle = document.getElementById("gameTitle");
+    const sceneLayers = [document.getElementById("sceneA"), document.getElementById("sceneB")];
+    const locationFlash = document.getElementById("locationFlash");
+    const catSprite = document.getElementById("catSprite");
+
+    // Image files for the web app, loaded from web/images/. Each room maps to a
+    // base name; the "_landscape" / "_portrait" variant is chosen at runtime to
+    // match the viewport. Add matching files to light up a location; any room
+    // not listed simply stays black. (Separate from the iOS Assets.xcassets.)
+    const ROOM_BACKGROUNDS = {
+        innKitchen:  "bg_inn_kitchen",
+        square:      "bg_village_square",
+        townButcher: "bg_butcher",
+        townBakery:  "bg_bakery",
+        townFish:    "bg_fishmonger",
+    };
+    const CAT_SPRITE = "images/cat_sprite.png";   // transparent-background PNG
+    const CAT_ROOM = "townFish";
+    const portraitQuery = window.matchMedia("(orientation: portrait)");
+
+    // Resolves a room to its orientation-appropriate background URL (or null).
+    function backgroundURL(roomID) {
+        const base = ROOM_BACKGROUNDS[roomID];
+        if (!base) return null;
+        const orientation = portraitQuery.matches ? "portrait" : "landscape";
+        return `images/${base}_${orientation}.png`;
+    }
+
+    catSprite.style.backgroundImage = `url("${CAT_SPRITE}")`;
 
     let game = null;
     let rendered = 0; // transcript entries already on screen
+    let activeLayer = 0;      // which #scene layer is currently visible
+    let lastRoomID = null;    // last room the scene reacted to
+    let flashTimer = null;
 
     function buildMenu() {
         for (const scenario of SCENARIOS) {
@@ -43,11 +74,13 @@
     function startGame(scenario) {
         game = new Game(scenario);
         rendered = 0;
+        lastRoomID = null;
         transcriptEl.textContent = "";
         gameTitle.textContent = scenario.title;
         menuEl.hidden = true;
         gameEl.hidden = false;
         render();
+        updateScene();
         updateButton();
         input.focus();
     }
@@ -56,6 +89,57 @@
         gameEl.hidden = true;
         menuEl.hidden = false;
         game = null;
+        clearScene();
+    }
+
+    // ---- Scene (background art, arrival card, cat sprite) ----
+
+    // Reacts to the current room: cross-fades the backdrop, toggles the cat,
+    // and flashes the location name. A no-op while the room is unchanged.
+    function updateScene() {
+        if (!game) return;
+        const roomID = game.roomID;
+        if (roomID === lastRoomID) return;
+        lastRoomID = roomID;
+
+        const url = backgroundURL(roomID);
+        const incoming = 1 - activeLayer;
+        sceneLayers[incoming].style.backgroundImage = url ? `url("${url}")` : "none";
+        sceneLayers[incoming].classList.add("visible");
+        sceneLayers[activeLayer].classList.remove("visible");
+        activeLayer = incoming;
+
+        catSprite.classList.toggle("visible", roomID === CAT_ROOM);
+        flashLocation(game.roomTitle);
+    }
+
+    // Swap the current backdrop to the other orientation variant on rotate.
+    portraitQuery.addEventListener("change", function () {
+        if (!game || lastRoomID === null) return;
+        const url = backgroundURL(lastRoomID);
+        sceneLayers[activeLayer].style.backgroundImage = url ? `url("${url}")` : "none";
+    });
+
+    // Shows the arrival card, cancelling any card still fading so quick moves
+    // don't leave it stuck on screen.
+    function flashLocation(title) {
+        if (!title) return;
+        clearTimeout(flashTimer);
+        locationFlash.textContent = title;
+        locationFlash.classList.add("show");
+        flashTimer = setTimeout(() => locationFlash.classList.remove("show"), 1600);
+    }
+
+    // Resets the scene to plain black (used when returning to the menu).
+    function clearScene() {
+        clearTimeout(flashTimer);
+        sceneLayers.forEach(layer => {
+            layer.classList.remove("visible");
+            layer.style.backgroundImage = "none";
+        });
+        catSprite.classList.remove("visible");
+        locationFlash.classList.remove("show");
+        lastRoomID = null;
     }
 
     function render() {
@@ -85,6 +169,7 @@
         updateButton();
         game.process(value);
         render();
+        updateScene();
         input.focus();
     });
 

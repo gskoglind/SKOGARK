@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @main struct MyApp: App {
     var body: some Scene {
@@ -90,6 +91,11 @@ struct GameView: View {
     @State private var command = ""
     @FocusState private var inputFocused: Bool
 
+    // Transient "you have arrived" location card.
+    @State private var flashTitle: String?
+    @State private var flashOpacity: Double = 0
+    @State private var flashTask: Task<Void, Never>?
+
     var body: some View {
         VStack(spacing: 0) {
             titleBar
@@ -98,7 +104,114 @@ struct GameView: View {
             Divider()
             inputBar
         }
-        .background(Color.black)
+        .background(backgroundView)
+        .overlay(alignment: .bottomTrailing) { catSprite }
+        .overlay(alignment: .top) { locationFlash }
+        .onAppear { flashLocation(game.roomTitle) }
+        .onChange(of: game.roomID) { flashLocation(game.roomTitle) }
+    }
+
+    /// A location name that fades in when the player arrives somewhere new,
+    /// lingers briefly, then fades out. Purely decorative, so it ignores taps.
+    private var locationFlash: some View {
+        Group {
+            if let flashTitle {
+                Text(flashTitle)
+                    .font(.system(.title2, design: .monospaced).weight(.bold))
+                    .foregroundStyle(.green)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 14)
+                    .background(.black.opacity(0.6), in: Capsule())
+                    .overlay(Capsule().strokeBorder(Color.green.opacity(0.5), lineWidth: 1))
+                    .opacity(flashOpacity)
+            }
+        }
+        .padding(.top, 12)
+        .allowsHitTesting(false)
+    }
+
+    /// Shows the arrival card for `title`, cancelling any card still on screen
+    /// so rapid movement doesn't stack overlapping animations.
+    private func flashLocation(_ title: String) {
+        guard !title.isEmpty else { return }
+        flashTask?.cancel()
+        flashTitle = title
+        flashTask = Task { @MainActor in
+            withAnimation(.easeIn(duration: 0.25)) { flashOpacity = 1 }
+            try? await Task.sleep(for: .seconds(1.4))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.6)) { flashOpacity = 0 }
+        }
+    }
+
+    /// Full-bleed location artwork behind the terminal, with a dark gradient
+    /// scrim so the monospaced text stays legible. Rooms without art fall back
+    /// to plain black, and moving between rooms cross-fades the image.
+    private var backgroundView: some View {
+        GeometryReader { geo in
+            // Compare width vs height rather than size class: on iPad both
+            // orientations are .regular, so size class can't tell them apart.
+            let orientation = geo.size.width > geo.size.height ? "landscape" : "portrait"
+            let assetName = Self.backgroundImageBaseName(for: game.roomID)
+                .map { "\($0)_\(orientation)" }
+            ZStack {
+                Color.black
+                if let assetName, let image = UIImage(named: assetName) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                        .transition(.opacity)
+                        .id(assetName)
+                    LinearGradient(
+                        colors: [.black.opacity(0.35), .black.opacity(0.75)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.4), value: game.roomID)
+    }
+
+    /// The stray cat that loiters by the fishmonger's stall. Shown whenever the
+    /// player is at the fishmonger. It lives on the content layer (not the
+    /// full-bleed background) so it stays above the software keyboard — in iPad
+    /// landscape especially — and sits just above the input row. Supply a
+    /// transparent-background "cat_sprite" image to light it up.
+    private var catSprite: some View {
+        Group {
+            if game.roomID == "townFish", let cat = UIImage(named: "cat_sprite") {
+                Image(uiImage: cat)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 170)
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 72)
+                    .transition(.opacity)
+            }
+        }
+        .allowsHitTesting(false)
+        .animation(.easeInOut(duration: 0.4), value: game.roomID)
+    }
+
+    /// Maps a room ID to the base name of its artwork. The orientation suffix
+    /// ("_landscape" / "_portrait") is appended at display time, so add both
+    /// variants (e.g. "bg_fishmonger_landscape" and "bg_fishmonger_portrait")
+    /// to Assets.xcassets. Any room not listed here shows a black background.
+    private static func backgroundImageBaseName(for roomID: String) -> String? {
+        switch roomID {
+        case "innKitchen":  return "bg_inn_kitchen"
+        case "square":      return "bg_village_square"
+        case "townButcher": return "bg_butcher"
+        case "townBakery":  return "bg_bakery"
+        case "townFish":    return "bg_fishmonger"
+        default:            return nil
+        }
     }
 
     private var titleBar: some View {
@@ -115,7 +228,7 @@ struct GameView: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .background(Color.black)
+        .background(Color.black.opacity(0.55))
     }
 
     private var transcriptView: some View {
@@ -162,7 +275,7 @@ struct GameView: View {
                 .disabled(command.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding()
-        .background(Color.black)
+        .background(Color.black.opacity(0.55))
         .onAppear { inputFocused = true }
     }
 
