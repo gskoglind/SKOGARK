@@ -33,7 +33,7 @@
     };
     // Inlined data-URI sprite (see cat-sprite.js); falls back to a file if absent.
     const CAT_SPRITE = window.SKOGARK_CAT_SPRITE || "images/cat_sprite.png";
-    const CAT_ROOM = "townButcher";   // the cat waits in the butcher shop
+    const CAT_ROOM = "townFish";   // the stray cat waits at the fishmonger
     const portraitQuery = window.matchMedia("(orientation: portrait)");
 
     // Resolves a room to its orientation-appropriate background URL (or null).
