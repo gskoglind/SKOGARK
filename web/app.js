@@ -31,8 +31,9 @@
         townBakery:  "bg_bakery",
         townFish:    "bg_fishmonger",
     };
-    const CAT_SPRITE = "images/cat_sprite.png";   // transparent-background PNG
-    const CAT_ROOM = "townFish";
+    // Inlined data-URI sprite (see cat-sprite.js); falls back to a file if absent.
+    const CAT_SPRITE = window.SKOGARK_CAT_SPRITE || "images/cat_sprite.png";
+    const CAT_ROOM = "townButcher";   // the cat waits in the butcher shop
     const portraitQuery = window.matchMedia("(orientation: portrait)");
 
     // Resolves a room to its orientation-appropriate background URL (or null).

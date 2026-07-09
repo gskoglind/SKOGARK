@@ -178,14 +178,14 @@ struct GameView: View {
         .animation(.easeInOut(duration: 0.4), value: game.roomID)
     }
 
-    /// The stray cat that loiters by the fishmonger's stall. Shown whenever the
-    /// player is at the fishmonger. It lives on the content layer (not the
-    /// full-bleed background) so it stays above the software keyboard — in iPad
-    /// landscape especially — and sits just above the input row. Supply a
-    /// transparent-background "cat_sprite" image to light it up.
+    /// The shop cat that waits patiently in the butcher's shop, hoping for a
+    /// scrap. It lives on the content layer (not the full-bleed background) so it
+    /// stays above the software keyboard — in iPad landscape especially — and
+    /// sits just above the input row. Supply the transparent-background "cat"
+    /// image (from SKOGARK_cat.zip → cat.imageset) to light it up.
     private var catSprite: some View {
         Group {
-            if game.roomID == "townFish", let cat = UIImage(named: "cat_sprite") {
+            if game.roomID == "townButcher", let cat = UIImage(named: "cat") {
                 Image(uiImage: cat)
                     .resizable()
                     .scaledToFit()
