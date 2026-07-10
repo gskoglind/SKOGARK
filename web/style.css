@@ -4,6 +4,10 @@
 
 * { box-sizing: border-box; }
 
+/* The hidden attribute must win over the #menu/#game display rules below
+   (author ID selectors otherwise override the UA [hidden] { display:none }). */
+[hidden] { display: none !important; }
+
 html, body {
     margin: 0;
     height: 100%;
