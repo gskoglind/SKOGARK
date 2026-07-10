@@ -200,6 +200,9 @@ final class Game {
     var roomID: String { currentRoomID }
     /// The display title of the room the player is currently in.
     var roomTitle: String { rooms[currentRoomID]?.title ?? "" }
+    /// Whether the player can currently see here (a dark room needs a lit light
+    /// source). Drives the cellar's dark → lit background reveal.
+    var canSeeRoom: Bool { canSee }
     func has(flag: String) -> Bool { flags.contains(flag) }
     func set(flag: String) { flags.insert(flag) }
     func inventoryKinds() -> Set<String> { Set(inventory.compactMap { items[$0]?.kind }) }

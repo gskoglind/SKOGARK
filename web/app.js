@@ -30,15 +30,31 @@
         townButcher: "bg_butcher",
         townBakery:  "bg_bakery",
         townFish:    "bg_fishmonger",
+        westOfHouse: "bg_west_of_house",
+        behindHouse: "bg_behind_house",
+        kitchen:     "bg_kitchen",
+        // livingRoom and cellar are state-dependent — see backgroundBase().
     };
     // Inlined data-URI sprite (see cat-sprite.js); falls back to a file if absent.
     const CAT_SPRITE = window.SKOGARK_CAT_SPRITE || "images/cat_sprite.png";
     const CAT_ROOM = "townFish";   // the stray cat waits at the fishmonger
     const portraitQuery = window.matchMedia("(orientation: portrait)");
 
+    // Resolves a room to its background base name. The cellar is dark until a
+    // lit lantern is present, so it swaps between dark and egg-lit art.
+    function backgroundBase(roomID) {
+        if (roomID === "cellar") {
+            return (game && game.canSee()) ? "bg_cellar_lit" : "bg_cellar_dark";
+        }
+        if (roomID === "livingRoom") {
+            return (game && game.has("rugMoved")) ? "bg_living_room_open" : "bg_living_room";
+        }
+        return ROOM_BACKGROUNDS[roomID] || null;
+    }
+
     // Resolves a room to its orientation-appropriate background URL (or null).
     function backgroundURL(roomID) {
-        const base = ROOM_BACKGROUNDS[roomID];
+        const base = backgroundBase(roomID);
         if (!base) return null;
         const orientation = portraitQuery.matches ? "portrait" : "landscape";
         return `images/${base}_${orientation}.png`;
@@ -50,6 +66,7 @@
     let rendered = 0; // transcript entries already on screen
     let activeLayer = 0;      // which #scene layer is currently visible
     let lastRoomID = null;    // last room the scene reacted to
+    let lastSceneKey = null;  // room + lit state, so the backdrop reacts to light
     let flashTimer = null;
 
     function buildMenu() {
@@ -95,12 +112,16 @@
 
     // ---- Scene (background art, arrival card, cat sprite) ----
 
-    // Reacts to the current room: cross-fades the backdrop, toggles the cat,
-    // and flashes the location name. A no-op while the room is unchanged.
+    // Reacts to the scene: cross-fades the backdrop when the room OR its lit
+    // state changes (so lighting the cellar lantern reveals the egg), and
+    // flashes the location card / toggles the cat only when the room changes.
     function updateScene() {
         if (!game) return;
         const roomID = game.roomID;
-        if (roomID === lastRoomID) return;
+        const sceneKey = roomID + "|" + game.canSee() + "|" + game.has("rugMoved");
+        if (sceneKey === lastSceneKey) return;   // nothing visual changed
+        const roomChanged = roomID !== lastRoomID;
+        lastSceneKey = sceneKey;
         lastRoomID = roomID;
 
         const url = backgroundURL(roomID);
@@ -110,8 +131,10 @@
         sceneLayers[activeLayer].classList.remove("visible");
         activeLayer = incoming;
 
-        catSprite.classList.toggle("visible", roomID === CAT_ROOM);
-        flashLocation(game.roomTitle);
+        if (roomChanged) {
+            catSprite.classList.toggle("visible", roomID === CAT_ROOM);
+            flashLocation(game.roomTitle);
+        }
     }
 
     // Swap the current backdrop to the other orientation variant on rotate.
@@ -141,6 +164,7 @@
         catSprite.classList.remove("visible");
         locationFlash.classList.remove("show");
         lastRoomID = null;
+        lastSceneKey = null;
     }
 
     function render() {

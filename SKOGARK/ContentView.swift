@@ -153,7 +153,7 @@ struct GameView: View {
             // Compare width vs height rather than size class: on iPad both
             // orientations are .regular, so size class can't tell them apart.
             let orientation = geo.size.width > geo.size.height ? "landscape" : "portrait"
-            let assetName = Self.backgroundImageBaseName(for: game.roomID)
+            let assetName = backgroundImageBaseName(for: game.roomID)
                 .map { "\($0)_\(orientation)" }
             ZStack {
                 Color.black
@@ -175,17 +175,26 @@ struct GameView: View {
             .frame(width: geo.size.width, height: geo.size.height)
         }
         .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.4), value: game.roomID)
+        // Animate whenever the room OR its lit state changes, so lighting the
+        // lantern in the cellar cross-fades from dark to the egg-lit view.
+        .animation(.easeInOut(duration: 0.4), value: sceneKey)
     }
 
-    /// The shop cat that waits patiently in the butcher's shop, hoping for a
+    /// A change key covering every bit of state that can swap the backdrop —
+    /// room, lit state (cellar), and whether the rug has been moved (living
+    /// room) — so each transition cross-fades.
+    private var sceneKey: String {
+        "\(game.roomID)-\(game.canSeeRoom)-\(game.has(flag: "rugMoved"))"
+    }
+
+    /// The stray cat that loiters at the fishmonger's stall, hoping for a
     /// scrap. It lives on the content layer (not the full-bleed background) so it
     /// stays above the software keyboard — in iPad landscape especially — and
     /// sits just above the input row. Supply the transparent-background "cat"
-    /// image (from SKOGARK_cat.zip → cat.imageset) to light it up.
+    /// image (a cat.imageset) to light it up.
     private var catSprite: some View {
         Group {
-            if game.roomID == "townButcher", let cat = UIImage(named: "cat") {
+            if game.roomID == "townFish", let cat = UIImage(named: "cat") {
                 Image(uiImage: cat)
                     .resizable()
                     .scaledToFit()
@@ -199,17 +208,24 @@ struct GameView: View {
         .animation(.easeInOut(duration: 0.4), value: game.roomID)
     }
 
-    /// Maps a room ID to the base name of its artwork. The orientation suffix
+    /// Maps a room to the base name of its artwork, factoring in state: the
+    /// cellar is dark until a lit lantern is present, and the living room shows
+    /// the trap door once the rug is moved. The orientation suffix
     /// ("_landscape" / "_portrait") is appended at display time, so add both
     /// variants (e.g. "bg_fishmonger_landscape" and "bg_fishmonger_portrait")
     /// to Assets.xcassets. Any room not listed here shows a black background.
-    private static func backgroundImageBaseName(for roomID: String) -> String? {
+    private func backgroundImageBaseName(for roomID: String) -> String? {
         switch roomID {
         case "innKitchen":  return "bg_inn_kitchen"
         case "square":      return "bg_village_square"
         case "townButcher": return "bg_butcher"
         case "townBakery":  return "bg_bakery"
         case "townFish":    return "bg_fishmonger"
+        case "westOfHouse": return "bg_west_of_house"
+        case "behindHouse": return "bg_behind_house"
+        case "kitchen":     return "bg_kitchen"
+        case "livingRoom":  return game.has(flag: "rugMoved") ? "bg_living_room_open" : "bg_living_room"
+        case "cellar":      return game.canSeeRoom ? "bg_cellar_lit" : "bg_cellar_dark"
         default:            return nil
         }
     }
