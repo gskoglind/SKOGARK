@@ -165,6 +165,180 @@ body {
     font-weight: 600;
 }
 
+#voiceButton {
+    background: transparent;
+    border: 1px solid #333;
+    border-radius: 6px;
+    color: #4ade80;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 3px 8px;
+}
+
+#voiceButton[aria-pressed="false"] {
+    color: #6b6b6b;
+    border-color: #2a2a2a;
+}
+
+#shipsButton {
+    background: transparent;
+    border: 1px solid #333;
+    border-radius: 6px;
+    color: #4ade80;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 3px 8px;
+}
+
+/* Live-ships map overlay */
+#shipsOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 16px;
+}
+
+#shipsPanel {
+    display: flex;
+    flex-direction: column;
+    width: min(900px, 100%);
+    height: min(80vh, 100%);
+    background: #0b0b0b;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+#shipsHeader {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #222;
+}
+
+#shipsTitle {
+    color: #9a9a9a;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+#shipsClose {
+    margin-left: auto;
+    background: transparent;
+    border: none;
+    color: #4ade80;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+}
+
+#shipsMap {
+    flex: 1 1 auto;
+    min-height: 0;
+    background: #111;
+}
+
+#shipsStatus {
+    padding: 8px 14px;
+    color: #7a7a7a;
+    font-size: 12px;
+    border-top: 1px solid #222;
+}
+
+/* Live-webcam overlay (shares the ships overlay's look) */
+#camsButton {
+    background: transparent;
+    border: 1px solid #333;
+    border-radius: 6px;
+    color: #4ade80;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 3px 8px;
+}
+
+#camsOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 16px;
+}
+
+.overlay-panel {
+    display: flex;
+    flex-direction: column;
+    width: min(900px, 100%);
+    height: min(80vh, 100%);
+    background: #0b0b0b;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.overlay-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #222;
+}
+
+.overlay-title {
+    margin-right: auto;
+    color: #9a9a9a;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.overlay-status {
+    padding: 8px 14px;
+    color: #7a7a7a;
+    font-size: 12px;
+    border-top: 1px solid #222;
+}
+
+.overlay-status a { color: #4ade80; }
+
+#camsSelect {
+    background: #111;
+    color: #dcdcdc;
+    border: 1px solid #333;
+    border-radius: 6px;
+    font: inherit;
+    font-size: 13px;
+    padding: 3px 6px;
+}
+
+#camsClose {
+    background: transparent;
+    border: none;
+    color: #4ade80;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+}
+
+#camsFrame {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    border: 0;
+    background: #000;
+}
+
 #transcript {
     flex: 1 1 auto;
     overflow-y: auto;

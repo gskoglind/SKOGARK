@@ -126,6 +126,7 @@ class Game {
                 break;
             case "go": case "walk": case "run": case "climb":
             case "enter": case "crawl": case "cross":
+            case "board": case "sail": case "depart":
                 this.handleGo(rest);
                 break;
             case "examine": case "x": case "inspect": case "read":
@@ -223,6 +224,7 @@ class Game {
 
         this.currentRoomID = destination;
         this.describeCurrentRoom(false);
+        if (this.scenario.onEnterRoom) this.scenario.onEnterRoom(this, destination);
     }
 
     handleGo(words) {
@@ -929,7 +931,131 @@ function townScenario() {
     };
 }
 
-const SCENARIOS = [houseScenario(), townScenario()];
+function riverboatScenario() {
+    // True once the guest has picked one of the three sailings.
+    const choseCruise = (game) =>
+        game.has("cruise_cannon") || game.has("cruise_afternoon") || game.has("cruise_sunset");
+    return {
+        id: "riverboat",
+        title: "Savannah Riverboat",
+        blurb: "Take a paddle-steamer sightseeing tour on the Savannah River: pick a sailing, board at River Street, and ride past the busy port to Old Fort Jackson as Captain Mike narrates.",
+        banner: [
+            "SAVANNAH RIVERBOAT",
+            "A narrated cruise on the Savannah River. (c) 2026",
+            "Type HELP for commands, and READ SCHEDULE for today's sailings.",
+            "─────────────────────────────",
+        ].join("\n"),
+        startRoomID: "riverStreet",
+        maxScore: 25,
+        startingCoins: 0,
+        build: buildRiverboatWorld,
+        portalGate(game, direction) {
+            if (game.roomID === "riverStreet" && direction === "north" && !choseCruise(game)) {
+                return "\"Which sailing?\" Captain Mike calls down from the deck. \"Board the CANNON, the AFTERNOON, or the SUNSET cruise.\"";
+            }
+            return null;
+        },
+        portalDirection(game, id) {
+            // Choosing a sailing and stepping aboard are one action: each cruise
+            // placard boards the Belle and records the choice.
+            if (game.roomID !== "riverStreet") return null;
+            switch (id) {
+                case "cannonCruise": game.set("cruise_cannon"); return "north";
+                case "afternoonCruise": game.set("cruise_afternoon"); return "north";
+                case "sunsetCruise": game.set("cruise_sunset"); return "north";
+                default: return null;
+            }
+        },
+        fixtureLine(game, id) {
+            if (id === "captain") return "Captain Mike stands at the wheel, narrating the tour.";
+            if (id === "guests") return "Fellow sightseers wait on the wharf, tickets in hand.";
+            return null; // schedule, gangway, ships, bridge, fort — woven into the prose
+        },
+        onTalk(game, id) {
+            if (id === "guests") {
+                game.emit("\"First time on the Belle?\" a fellow passenger asks. \"They say Captain Mike tells the best stories on the river.\"");
+                return true;
+            }
+            if (id === "captain") {
+                game.emit("\"Welcome aboard the Savannah Belle!\" the captain says. \"Four decks to enjoy — two dining rooms below, the air-conditioned sightseeing lounge on the third, and this open deck up top for the best views. We'll steam upriver past the port to the Talmadge Bridge, come about, and call on Old Fort Jackson. Head WEST from the top deck when you're ready.\"");
+                return true;
+            }
+            return false;
+        },
+        onEnterRoom(game, roomID) {
+            // Captain Mike narrates each new leg over the PA (once), no matter
+            // which of the four decks the passenger is on.
+            if (roomID === "fortJackson") {
+                if (game.isWon) return;
+                if (game.has("cruise_cannon")) {
+                    game.emit("At Old Fort Jackson a cannon crew in period dress touches off the great gun — BOOOM! — a plume of white smoke and a salute that rolls across the water and thumps in your chest.");
+                }
+                let closing;
+                if (game.has("cruise_sunset")) {
+                    closing = "Old Fort Jackson's brick ramparts glow in the last of the sunset as the Belle turns for the lamplit run home to River Street.";
+                } else if (game.has("cruise_cannon")) {
+                    closing = "With the cannon's echo still fading over the marsh, Captain Mike brings the Belle about for the run home to River Street.";
+                } else {
+                    closing = "The Belle eases past Old Fort Jackson's weathered ramparts, then comes about for the easy run home to River Street.";
+                }
+                game.award(15, null);
+                game.win(closing);
+            } else if (roomID.startsWith("port") && !game.has("sawPort")) {
+                game.set("sawPort");
+                game.award(5, "Captain Mike: \"Off to starboard lies the Port of Savannah, one of the busiest in the nation. Towering container ships ride the channel while stout tugboats shoulder them to their berths.\"");
+            } else if (roomID.startsWith("bridge") && !game.has("sawBridge")) {
+                game.set("sawBridge");
+                game.award(5, "Captain Mike: \"Overhead soars the Talmadge Memorial Bridge, its cables strung like a harp above the river. Here we come about for the run downriver.\" (Head EAST to continue to Old Fort Jackson.)");
+            }
+        },
+        hintStage(game) {
+            if (!choseCruise(game)) {
+                return { key: "board", clues: [
+                    "Today's sailings are chalked on the schedule board at the dock — READ the SCHEDULE.",
+                    "Pick one and step aboard: BOARD THE CANNON CRUISE (or the AFTERNOON, or the SUNSET cruise).",
+                ] };
+            }
+            // Only the open-air top deck (D4) drives the boat onward; every
+            // leg's other decks are yours to explore with UP/DOWN.
+            const room = game.roomID;
+            const onTopDeck = room.endsWith("D4");
+            if (room.startsWith("bridge")) {
+                return onTopDeck
+                    ? { key: "bridge4", clues: [
+                        "The Belle comes about beneath the bridge to head downriver.",
+                        "Go EAST to run down to Old Fort Jackson.",
+                    ] }
+                    : { key: "bridgeUp", clues: [
+                        "You can wander all four decks here with UP and DOWN.",
+                        "To carry on, climb UP to the open-air deck; the Belle turns here, so head EAST toward Old Fort Jackson.",
+                    ] };
+            }
+            if (room.startsWith("port")) {
+                return onTopDeck
+                    ? { key: "port4", clues: [
+                        "The Talmadge Bridge lies just ahead upriver.",
+                        "Continue WEST to reach the bridge.",
+                    ] }
+                    : { key: "portUp", clues: [
+                        "Explore the decks with UP and DOWN.",
+                        "To carry on, climb UP to the open-air deck and head WEST toward the bridge.",
+                    ] };
+            }
+            // River Street leg (riverD1…riverD4).
+            return onTopDeck
+                ? { key: "river4", clues: [
+                    "You're up on the open-air deck — time to get underway.",
+                    "Head WEST to steam upriver toward the Talmadge Bridge.",
+                ] }
+                : { key: "riverUp", clues: [
+                    "You can visit all four decks with UP and DOWN — two dining rooms, the sightseeing lounge, and the open-air deck up top.",
+                    "To get underway, climb UP to the open-air deck and head WEST.",
+                ] };
+        },
+    };
+}
+
+const SCENARIOS = [houseScenario(), townScenario(), riverboatScenario()];
 
 // MARK: - World Builders
 
@@ -1049,6 +1175,104 @@ function buildTownWorld() {
     addRoom({ id: "townFish", title: "The Fishmonger",
         description: "The day's catch glistens on crushed ice while the fishwife calls her prices. The square is back to the south.",
         exits: { south: "square" }, items: ["fish", "fishwife", "cat"] });
+
+    return { rooms, items };
+}
+
+function buildRiverboatWorld() {
+    const items = {};
+    const addItem = (p) => { const it = makeItem(p); items[it.id] = it; };
+
+    // Dockside fixtures at River Street.
+    addItem({ id: "schedule", name: "schedule board", nouns: ["schedule", "board", "sign", "chalkboard"],
+        description: "A chalkboard easel by the gangway listing today's sailings.",
+        readText: "\"SAVANNAH BELLE — TODAY'S SAILINGS\n  • 1:00  The CANNON Cruise — includes a cannon salute at Fort Jackson\n  • 3:30  The AFTERNOON Cruise\n  • 7:00  The SUNSET Cruise\nEvery cruise runs west to the Talmadge Bridge, then down to Old Fort Jackson.\nBOARD the cruise you'd like.\"",
+        isFixture: true });
+    addItem({ id: "gangway", name: "gangway", nouns: ["gangway", "gangplank", "ramp"],
+        description: "A broad wooden gangway sloping up to the Belle's main deck.", isFixture: true });
+    addItem({ id: "guests", name: "guests", nouns: ["guests", "guest", "passengers", "tourists", "crowd"],
+        description: "Cheerful guests in sun hats and windbreakers, waiting to board.",
+        isFixture: true, isCreature: true });
+    addItem({ id: "cannonCruise", name: "Cannon Cruise", nouns: ["cannon", "one", "noon", "first"],
+        description: "The 1:00 sailing — it includes a cannon salute at Old Fort Jackson.", isFixture: true });
+    addItem({ id: "afternoonCruise", name: "Afternoon Cruise", nouns: ["afternoon", "half", "three", "matinee"],
+        description: "The 3:30 sailing, an easy afternoon run to the fort and back.", isFixture: true });
+    addItem({ id: "sunsetCruise", name: "Sunset Cruise", nouns: ["sunset", "evening", "seven", "dusk"],
+        description: "The 7:00 sailing, timed to catch the sunset over the marshes.", isFixture: true });
+
+    // Aboard and along the river.
+    addItem({ id: "captain", name: "Captain Mike", nouns: ["captain", "mike", "skipper", "pilot"],
+        description: "Captain Mike, the Belle's weathered and genial skipper, one hand on the wheel and a microphone in the other.",
+        isFixture: true, isCreature: true });
+    addItem({ id: "containership", name: "container ship", nouns: ["container", "ship", "freighter", "cargo"],
+        description: "A colossal container ship stacked with steel boxes from every corner of the world, riding low with cargo.", isFixture: true });
+    addItem({ id: "tugboat", name: "tugboat", nouns: ["tug", "tugboat", "tugs"],
+        description: "A squat, powerful tugboat churning past, its wake rocking the Belle.", isFixture: true });
+    addItem({ id: "bridge", name: "Talmadge Bridge", nouns: ["bridge", "talmadge", "cables", "span"],
+        description: "The Talmadge Memorial Bridge, a soaring cable-stayed span high above the river.", isFixture: true });
+    addItem({ id: "fort", name: "Old Fort Jackson", nouns: ["fort", "jackson", "ramparts", "walls"],
+        description: "Old Fort Jackson, a squat brick fortress guarding a bend in the river.", isFixture: true });
+    addItem({ id: "cannon", name: "cannon", nouns: ["cannon", "gun"],
+        description: "A black iron cannon on the fort's rampart, manned by a crew in period dress.", isFixture: true });
+
+    const rooms = {};
+    const addRoom = (p) => { const r = makeRoom(p); rooms[r.id] = r; };
+
+    addRoom({ id: "riverStreet", title: "River Street Dock",
+        description: "You're on the cobblestones of River Street, just east of the Hyatt, where the paddle steamer Savannah Belle is moored. A gangway leads aboard, and a chalk schedule board lists today's sailings. Fellow sightseers line up around you, tickets in hand. (READ the SCHEDULE, then BOARD a cruise.)",
+        exits: { north: "riverD1" },
+        items: ["schedule", "gangway", "guests", "cannonCruise", "afternoonCruise", "sunsetCruise"] });
+
+    // The Belle is a four-deck boat; each cruise leg has all four decks, so
+    // passengers can roam UP/DOWN at every stage. The tour advances from the
+    // open-air top deck (D4): WEST to the bridge, then EAST to the fort.
+
+    // Leg 1 — moored at River Street, downtown Savannah in view.
+    addRoom({ id: "riverD1", title: "First Deck — Dining Room",
+        description: "The first-deck dining room, white-clothed tables and a Lowcountry buffet, windows framing the cobblestones of River Street. A stairway leads UP.",
+        exits: { up: "riverD2" } });
+    addRoom({ id: "riverD2", title: "Second Deck — Dining Room",
+        description: "A second, airier dining room, its tall windows looking out on the historic River Street storefronts. Stairs lead UP and DOWN.",
+        exits: { up: "riverD3", down: "riverD1" } });
+    addRoom({ id: "riverD3", title: "Third Deck — Sightseeing Lounge",
+        description: "The air-conditioned sightseeing lounge, wrapped in panoramic glass, cool and quiet above the waterfront bustle. Stairs lead UP and DOWN.",
+        exits: { up: "riverD4", down: "riverD2" } });
+    addRoom({ id: "riverD4", title: "Fourth Deck — Open-Air Deck",
+        description: "The breezy open-air top deck. Captain Mike is at the wheel, and off the rail stand the golden dome of City Hall, the old Cotton Exchange, and the Waving Girl statue on her lonely watch. Head WEST to get underway upriver; stairs lead DOWN.",
+        exits: { west: "portD4", down: "riverD3" }, items: ["captain"] });
+
+    // Leg 2 — the working river, amid the Port of Savannah.
+    addRoom({ id: "portD1", title: "First Deck — Dining Room",
+        description: "The first-deck dining room; through the windows the steel hulls of container ships slide past, close enough to read their names. A stairway leads UP.",
+        exits: { up: "portD2" }, items: ["containership", "tugboat"] });
+    addRoom({ id: "portD2", title: "Second Deck — Dining Room",
+        description: "The second-deck dining room, dessert plates rattling as a tugboat's wake rolls under the Belle. Stairs lead UP and DOWN.",
+        exits: { up: "portD3", down: "portD1" }, items: ["containership", "tugboat"] });
+    addRoom({ id: "portD3", title: "Third Deck — Sightseeing Lounge",
+        description: "The cool sightseeing lounge; behind the glass, towering cranes work the busy terminals of the Port of Savannah. Stairs lead UP and DOWN.",
+        exits: { up: "portD4", down: "portD2" }, items: ["containership", "tugboat"] });
+    addRoom({ id: "portD4", title: "Fourth Deck — Open-Air Deck",
+        description: "The open-air deck amid the working river — container ships and tugboats on every side, the Talmadge Bridge climbing into the sky ahead. Continue WEST toward the bridge; stairs lead DOWN.",
+        exits: { west: "bridgeD4", down: "portD3" }, items: ["captain", "containership", "tugboat"] });
+
+    // Leg 3 — beneath the Talmadge Bridge, where the Belle comes about.
+    addRoom({ id: "bridgeD1", title: "First Deck — Dining Room",
+        description: "The first-deck dining room; the light dims for a moment as the great bridge passes overhead. A stairway leads UP.",
+        exits: { up: "bridgeD2" }, items: ["bridge"] });
+    addRoom({ id: "bridgeD2", title: "Second Deck — Dining Room",
+        description: "The second-deck dining room, passengers pressing to the windows to crane up at the span. Stairs lead UP and DOWN.",
+        exits: { up: "bridgeD3", down: "bridgeD1" }, items: ["bridge"] });
+    addRoom({ id: "bridgeD3", title: "Third Deck — Sightseeing Lounge",
+        description: "The sightseeing lounge; through the glass the Talmadge's pale cables fan out far above. Stairs lead UP and DOWN.",
+        exits: { up: "bridgeD4", down: "bridgeD2" }, items: ["bridge"] });
+    addRoom({ id: "bridgeD4", title: "Fourth Deck — Open-Air Deck",
+        description: "The open-air deck beneath the Talmadge Memorial Bridge, its pale cables soaring overhead. Captain Mike brings the Belle about here for the run downriver — go EAST to Old Fort Jackson; stairs lead DOWN.",
+        exits: { east: "fortJackson", down: "bridgeD3" }, items: ["captain", "bridge"] });
+
+    // Arrival — reaching the fort wins.
+    addRoom({ id: "fortJackson", title: "Old Fort Jackson",
+        description: "The Belle rounds a marshy bend to Old Fort Jackson, its brick ramparts standing guard where the river narrows.",
+        exits: {}, items: ["fort", "cannon"] });
 
     return { rooms, items };
 }

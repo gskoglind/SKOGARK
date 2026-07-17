@@ -122,6 +122,8 @@ struct Scenario: Identifiable {
     var onPut: ((Game, _ object: String, _ target: String) -> Void)? = nil
     /// Handles TALK to a creature; return true if handled.
     var onTalk: ((Game, String) -> Bool)? = nil
+    /// Reacts to the player arriving in a room, after its description prints.
+    var onEnterRoom: ((Game, _ roomID: String) -> Void)? = nil
     /// Progressive, context-aware hints: returns the current puzzle-stage key
     /// and its escalating clues (gentle → explicit) for the HINT command.
     var hintStage: ((Game) -> (key: String, clues: [String]))? = nil
@@ -165,7 +167,7 @@ final class Game {
     private var hintStageKey = ""
 
     /// All playable scenarios, for the selection menu.
-    static let scenarios: [Scenario] = [houseScenario(), townScenario()]
+    static let scenarios: [Scenario] = [houseScenario(), townScenario(), riverboatScenario()]
 
     convenience init() { self.init(scenario: Game.houseScenario()) }
 
@@ -247,7 +249,7 @@ final class Game {
             }
         case "what", "survey":
             lookAround()
-        case "go", "walk", "run", "climb", "enter", "crawl", "cross":
+        case "go", "walk", "run", "climb", "enter", "crawl", "cross", "board", "sail", "depart":
             handleGo(rest)
         case "examine", "x", "inspect", "read":
             if verb == "read" { readItem(rest) } else { examine(rest) }
@@ -325,6 +327,7 @@ final class Game {
 
         currentRoomID = destination
         describeCurrentRoom()
+        scenario.onEnterRoom?(self, destination)
     }
 
     /// Handles a movement verb whose object may be a direction word, a
@@ -1132,6 +1135,143 @@ extension Game {
         )
     }
 
+    /// The riverboat: a narrated sightseeing cruise on the Savannah River.
+    /// Pick a sailing at the River Street dock, board the paddle steamer
+    /// *Savannah Belle*, and ride upriver past the busy port to the Talmadge
+    /// Bridge, then down to Old Fort Jackson. The 1 o'clock "Cannon Cruise"
+    /// adds a cannon salute at the fort.
+    static func riverboatScenario() -> Scenario {
+        // True once the guest has picked one of the three sailings.
+        func choseCruise(_ game: Game) -> Bool {
+            game.has(flag: "cruise_cannon") || game.has(flag: "cruise_afternoon")
+                || game.has(flag: "cruise_sunset")
+        }
+        return Scenario(
+            id: "riverboat",
+            title: "Savannah Riverboat",
+            blurb: "Take a paddle-steamer sightseeing tour on the Savannah River: pick a sailing, board at River Street, and ride past the busy port to Old Fort Jackson as Captain Mike narrates.",
+            banner: """
+            SAVANNAH RIVERBOAT
+            A narrated cruise on the Savannah River. (c) 2026
+            Type HELP for commands, and READ SCHEDULE for today's sailings.
+            ─────────────────────────────
+            """,
+            startRoomID: "riverStreet",
+            maxScore: 25,
+            startingCoins: 0,
+            build: buildRiverboatWorld,
+            portalGate: { game, direction in
+                if game.roomID == "riverStreet", direction == .north, !choseCruise(game) {
+                    return "\"Which sailing?\" Captain Mike calls down from the deck. \"Board the CANNON, the AFTERNOON, or the SUNSET cruise.\""
+                }
+                return nil
+            },
+            portalDirection: { game, id in
+                // Choosing a sailing and stepping aboard are one action: each
+                // cruise placard boards the Belle and records the choice.
+                guard game.roomID == "riverStreet" else { return nil }
+                switch id {
+                case "cannonCruise": game.set(flag: "cruise_cannon"); return .north
+                case "afternoonCruise": game.set(flag: "cruise_afternoon"); return .north
+                case "sunsetCruise": game.set(flag: "cruise_sunset"); return .north
+                default: return nil
+                }
+            },
+            fixtureLine: { game, id in
+                switch id {
+                case "captain":
+                    return "Captain Mike stands at the wheel, narrating the tour."
+                case "guests":
+                    return "Fellow sightseers wait on the wharf, tickets in hand."
+                default:
+                    return nil // schedule, gangway, ships, bridge, fort — woven into the prose
+                }
+            },
+            onTalk: { game, id in
+                switch id {
+                case "guests":
+                    game.emit("\"First time on the Belle?\" a fellow passenger asks. \"They say Captain Mike tells the best stories on the river.\"")
+                    return true
+                case "captain":
+                    game.emit("\"Welcome aboard the Savannah Belle!\" the captain says. \"Four decks to enjoy — two dining rooms below, the air-conditioned sightseeing lounge on the third, and this open deck up top for the best views. We'll steam upriver past the port to the Talmadge Bridge, come about, and call on Old Fort Jackson. Head WEST from the top deck when you're ready.\"")
+                    return true
+                default:
+                    return false
+                }
+            },
+            onEnterRoom: { game, roomID in
+                // Captain Mike narrates each new leg over the PA (once), no
+                // matter which of the four decks the passenger is on.
+                if roomID == "fortJackson" {
+                    guard !game.isWon else { return }
+                    if game.has(flag: "cruise_cannon") {
+                        game.emit("At Old Fort Jackson a cannon crew in period dress touches off the great gun — BOOOM! — a plume of white smoke and a salute that rolls across the water and thumps in your chest.")
+                    }
+                    let closing: String
+                    if game.has(flag: "cruise_sunset") {
+                        closing = "Old Fort Jackson's brick ramparts glow in the last of the sunset as the Belle turns for the lamplit run home to River Street."
+                    } else if game.has(flag: "cruise_cannon") {
+                        closing = "With the cannon's echo still fading over the marsh, Captain Mike brings the Belle about for the run home to River Street."
+                    } else {
+                        closing = "The Belle eases past Old Fort Jackson's weathered ramparts, then comes about for the easy run home to River Street."
+                    }
+                    game.award(15, nil)
+                    game.win(closing)
+                } else if roomID.hasPrefix("port"), !game.has(flag: "sawPort") {
+                    game.set(flag: "sawPort")
+                    game.award(5, "Captain Mike: \"Off to starboard lies the Port of Savannah, one of the busiest in the nation. Towering container ships ride the channel while stout tugboats shoulder them to their berths.\"")
+                } else if roomID.hasPrefix("bridge"), !game.has(flag: "sawBridge") {
+                    game.set(flag: "sawBridge")
+                    game.award(5, "Captain Mike: \"Overhead soars the Talmadge Memorial Bridge, its cables strung like a harp above the river. Here we come about for the run downriver.\" (Head EAST to continue to Old Fort Jackson.)")
+                }
+            },
+            hintStage: { game in
+                if !choseCruise(game) {
+                    return (key: "board", clues: [
+                        "Today's sailings are chalked on the schedule board at the dock — READ the SCHEDULE.",
+                        "Pick one and step aboard: BOARD THE CANNON CRUISE (or the AFTERNOON, or the SUNSET cruise).",
+                    ])
+                }
+                // Only the open-air top deck (D4) drives the boat onward;
+                // every leg's other decks are yours to explore with UP/DOWN.
+                let room = game.roomID
+                let onTopDeck = room.hasSuffix("D4")
+                if room.hasPrefix("bridge") {
+                    return onTopDeck
+                        ? (key: "bridge4", clues: [
+                            "The Belle comes about beneath the bridge to head downriver.",
+                            "Go EAST to run down to Old Fort Jackson.",
+                        ])
+                        : (key: "bridgeUp", clues: [
+                            "You can wander all four decks here with UP and DOWN.",
+                            "To carry on, climb UP to the open-air deck; the Belle turns here, so head EAST toward Old Fort Jackson.",
+                        ])
+                }
+                if room.hasPrefix("port") {
+                    return onTopDeck
+                        ? (key: "port4", clues: [
+                            "The Talmadge Bridge lies just ahead upriver.",
+                            "Continue WEST to reach the bridge.",
+                        ])
+                        : (key: "portUp", clues: [
+                            "Explore the decks with UP and DOWN.",
+                            "To carry on, climb UP to the open-air deck and head WEST toward the bridge.",
+                        ])
+                }
+                // River Street leg (riverD1…riverD4).
+                return onTopDeck
+                    ? (key: "river4", clues: [
+                        "You're up on the open-air deck — time to get underway.",
+                        "Head WEST to steam upriver toward the Talmadge Bridge.",
+                    ])
+                    : (key: "riverUp", clues: [
+                        "You can visit all four decks with UP and DOWN — two dining rooms, the sightseeing lounge, and the open-air deck up top.",
+                        "To get underway, climb UP to the open-air deck and head WEST.",
+                    ])
+            }
+        )
+    }
+
     // Small mutators the scenario hooks lean on.
     fileprivate func revealItem(_ id: String, inRoom roomID: String) {
         rooms[roomID]?.items.append(id)
@@ -1289,3 +1429,109 @@ private func buildTownWorld() -> (rooms: [String: Room], items: [String: Item]) 
 
     return (rooms, items)
 }
+private func buildRiverboatWorld() -> (rooms: [String: Room], items: [String: Item]) {
+    var items: [String: Item] = [:]
+    func add(_ item: Item) { items[item.id] = item }
+
+    // Dockside fixtures at River Street.
+    add(Item(id: "schedule", name: "schedule board", nouns: ["schedule", "board", "sign", "chalkboard"],
+             description: "A chalkboard easel by the gangway listing today's sailings.",
+             readText: "\"SAVANNAH BELLE — TODAY'S SAILINGS\n  • 1:00  The CANNON Cruise — includes a cannon salute at Fort Jackson\n  • 3:30  The AFTERNOON Cruise\n  • 7:00  The SUNSET Cruise\nEvery cruise runs west to the Talmadge Bridge, then down to Old Fort Jackson.\nBOARD the cruise you'd like.\"",
+             isFixture: true))
+    add(Item(id: "gangway", name: "gangway", nouns: ["gangway", "gangplank", "ramp"],
+             description: "A broad wooden gangway sloping up to the Belle's main deck.", isFixture: true))
+    add(Item(id: "guests", name: "guests", nouns: ["guests", "guest", "passengers", "tourists", "crowd"],
+             description: "Cheerful guests in sun hats and windbreakers, waiting to board.",
+             isFixture: true, isCreature: true))
+    add(Item(id: "cannonCruise", name: "Cannon Cruise", nouns: ["cannon", "one", "noon", "first"],
+             description: "The 1:00 sailing — it includes a cannon salute at Old Fort Jackson.", isFixture: true))
+    add(Item(id: "afternoonCruise", name: "Afternoon Cruise", nouns: ["afternoon", "half", "three", "matinee"],
+             description: "The 3:30 sailing, an easy afternoon run to the fort and back.", isFixture: true))
+    add(Item(id: "sunsetCruise", name: "Sunset Cruise", nouns: ["sunset", "evening", "seven", "dusk"],
+             description: "The 7:00 sailing, timed to catch the sunset over the marshes.", isFixture: true))
+
+    // Aboard and along the river.
+    add(Item(id: "captain", name: "Captain Mike", nouns: ["captain", "mike", "skipper", "pilot"],
+             description: "Captain Mike, the Belle's weathered and genial skipper, one hand on the wheel and a microphone in the other.",
+             isFixture: true, isCreature: true))
+    add(Item(id: "tugboat", name: "tugboat", nouns: ["tug", "tugboat", "tugs"],
+             description: "A squat, powerful tugboat churning past, its wake rocking the Belle.", isFixture: true))
+    add(Item(id: "containership", name: "container ship", nouns: ["container", "ship", "freighter", "cargo"],
+             description: "A colossal container ship stacked with steel boxes from every corner of the world, riding low with cargo.", isFixture: true))
+    add(Item(id: "bridge", name: "Talmadge Bridge", nouns: ["bridge", "talmadge", "cables", "span"],
+             description: "The Talmadge Memorial Bridge, a soaring cable-stayed span high above the river.", isFixture: true))
+    add(Item(id: "fort", name: "Old Fort Jackson", nouns: ["fort", "jackson", "ramparts", "walls"],
+             description: "Old Fort Jackson, a squat brick fortress guarding a bend in the river.", isFixture: true))
+    add(Item(id: "cannon", name: "cannon", nouns: ["cannon", "gun"],
+             description: "A black iron cannon on the fort's rampart, manned by a crew in period dress.", isFixture: true))
+
+    var rooms: [String: Room] = [:]
+    func add(_ room: Room) { rooms[room.id] = room }
+
+    add(Room(id: "riverStreet", title: "River Street Dock",
+             description: "You're on the cobblestones of River Street, just east of the Hyatt, where the paddle steamer Savannah Belle is moored. A gangway leads aboard, and a chalk schedule board lists today's sailings. Fellow sightseers line up around you, tickets in hand. (READ the SCHEDULE, then BOARD a cruise.)",
+             exits: [.north: "riverD1"],
+             items: ["schedule", "gangway", "guests", "cannonCruise", "afternoonCruise", "sunsetCruise"]))
+
+    // The Belle is a four-deck boat; each cruise leg has all four decks, so
+    // passengers can roam UP/DOWN at every stage. The tour advances from the
+    // open-air top deck (D4): WEST to the bridge, then EAST to the fort.
+
+    // Leg 1 — moored at River Street, downtown Savannah in view.
+    add(Room(id: "riverD1", title: "First Deck — Dining Room",
+             description: "The first-deck dining room, white-clothed tables and a Lowcountry buffet, windows framing the cobblestones of River Street. A stairway leads UP.",
+             exits: [.up: "riverD2"]))
+    add(Room(id: "riverD2", title: "Second Deck — Dining Room",
+             description: "A second, airier dining room, its tall windows looking out on the historic River Street storefronts. Stairs lead UP and DOWN.",
+             exits: [.up: "riverD3", .down: "riverD1"]))
+    add(Room(id: "riverD3", title: "Third Deck — Sightseeing Lounge",
+             description: "The air-conditioned sightseeing lounge, wrapped in panoramic glass, cool and quiet above the waterfront bustle. Stairs lead UP and DOWN.",
+             exits: [.up: "riverD4", .down: "riverD2"]))
+    add(Room(id: "riverD4", title: "Fourth Deck — Open-Air Deck",
+             description: "The breezy open-air top deck. Captain Mike is at the wheel, and off the rail stand the golden dome of City Hall, the old Cotton Exchange, and the Waving Girl statue on her lonely watch. Head WEST to get underway upriver; stairs lead DOWN.",
+             exits: [.west: "portD4", .down: "riverD3"],
+             items: ["captain"]))
+
+    // Leg 2 — the working river, amid the Port of Savannah.
+    add(Room(id: "portD1", title: "First Deck — Dining Room",
+             description: "The first-deck dining room; through the windows the steel hulls of container ships slide past, close enough to read their names. A stairway leads UP.",
+             exits: [.up: "portD2"],
+             items: ["containership", "tugboat"]))
+    add(Room(id: "portD2", title: "Second Deck — Dining Room",
+             description: "The second-deck dining room, dessert plates rattling as a tugboat's wake rolls under the Belle. Stairs lead UP and DOWN.",
+             exits: [.up: "portD3", .down: "portD1"],
+             items: ["containership", "tugboat"]))
+    add(Room(id: "portD3", title: "Third Deck — Sightseeing Lounge",
+             description: "The cool sightseeing lounge; behind the glass, towering cranes work the busy terminals of the Port of Savannah. Stairs lead UP and DOWN.",
+             exits: [.up: "portD4", .down: "portD2"],
+             items: ["containership", "tugboat"]))
+    add(Room(id: "portD4", title: "Fourth Deck — Open-Air Deck",
+             description: "The open-air deck amid the working river — container ships and tugboats on every side, the Talmadge Bridge climbing into the sky ahead. Continue WEST toward the bridge; stairs lead DOWN.",
+             exits: [.west: "bridgeD4", .down: "portD3"],
+             items: ["captain", "containership", "tugboat"]))
+
+    // Leg 3 — beneath the Talmadge Bridge, where the Belle comes about.
+    add(Room(id: "bridgeD1", title: "First Deck — Dining Room",
+             description: "The first-deck dining room; the light dims for a moment as the great bridge passes overhead. A stairway leads UP.",
+             exits: [.up: "bridgeD2"],
+             items: ["bridge"]))
+    add(Room(id: "bridgeD2", title: "Second Deck — Dining Room",
+             description: "The second-deck dining room, passengers pressing to the windows to crane up at the span. Stairs lead UP and DOWN.",
+             exits: [.up: "bridgeD3", .down: "bridgeD1"],
+             items: ["bridge"]))
+    add(Room(id: "bridgeD3", title: "Third Deck — Sightseeing Lounge",
+             description: "The sightseeing lounge; through the glass the Talmadge's pale cables fan out far above. Stairs lead UP and DOWN.",
+             exits: [.up: "bridgeD4", .down: "bridgeD2"],
+             items: ["bridge"]))
+    add(Room(id: "bridgeD4", title: "Fourth Deck — Open-Air Deck",
+             description: "The open-air deck beneath the Talmadge Memorial Bridge, its pale cables soaring overhead. Captain Mike brings the Belle about here for the run downriver — go EAST to Old Fort Jackson; stairs lead DOWN.",
+             exits: [.east: "fortJackson", .down: "bridgeD3"],
+             items: ["captain", "bridge"]))
+    add(Room(id: "fortJackson", title: "Old Fort Jackson",
+             description: "The Belle rounds a marshy bend to Old Fort Jackson, its brick ramparts standing guard where the river narrows.",
+             exits: [.west: "talmadgeTurn"],
+             items: ["fort", "cannon"]))
+
+    return (rooms, items)
+}
+

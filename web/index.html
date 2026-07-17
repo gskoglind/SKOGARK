@@ -6,7 +6,9 @@
     <meta name="color-scheme" content="dark">
     <meta name="description" content="SKOGARK — a tiny text adventure.">
     <title>SKOGARK — A Tiny Text Adventure</title>
-    <link rel="stylesheet" href="style.css?v=5">
+    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 </head>
 <body>
     <!-- Full-bleed location artwork behind the terminal. Two layers cross-fade
@@ -28,6 +30,12 @@
             <div id="titlebar">
                 <button id="menuButton" type="button">&lsaquo; Menu</button>
                 <span id="gameTitle"></span>
+                <button id="voiceButton" type="button" aria-pressed="true"
+                        title="Toggle spoken narration">&#128266; Voice</button>
+                <button id="shipsButton" type="button" hidden
+                        title="Live ships on the Savannah River">&#128674; Ships</button>
+                <button id="camsButton" type="button" hidden
+                        title="Live webcams along the river">&#128247; Cams</button>
             </div>
             <div id="transcript" role="log" aria-live="polite" aria-label="Game transcript"></div>
             <form id="inputBar" autocomplete="off">
@@ -42,11 +50,43 @@
             <!-- Arrival location card (top) and the fishmonger's stray cat. -->
             <div id="locationFlash" aria-hidden="true"></div>
             <div id="catSprite" aria-hidden="true"></div>
+
+            <!-- Live-ships map overlay (only used when a proxy URL is configured). -->
+            <div id="shipsOverlay" hidden>
+                <div id="shipsPanel">
+                    <div id="shipsHeader">
+                        <span id="shipsTitle">Ships on the Savannah River</span>
+                        <button id="shipsClose" type="button" aria-label="Close map">&times;</button>
+                    </div>
+                    <div id="shipsMap"></div>
+                    <div id="shipsStatus"></div>
+                </div>
+            </div>
+
+            <!-- Live-webcam overlay (SavannahCams feeds along the river). -->
+            <div id="camsOverlay" hidden>
+                <div id="camsPanel" class="overlay-panel">
+                    <div class="overlay-header">
+                        <span class="overlay-title">Live cameras along the river</span>
+                        <select id="camsSelect" aria-label="Choose a webcam"></select>
+                        <button id="camsClose" type="button" aria-label="Close cameras">&times;</button>
+                    </div>
+                    <iframe id="camsFrame" title="Live webcam"
+                            allow="autoplay; fullscreen" allowfullscreen></iframe>
+                    <div class="overlay-status">
+                        Live webcams courtesy of
+                        <a href="https://www.savannahcams.com/savannah-ga/" target="_blank" rel="noopener">SavannahCams.com</a>.
+                    </div>
+                </div>
+            </div>
         </section>
     </main>
 
-    <script src="engine.js?v=5"></script>
-    <script src="cat-sprite.js?v=5"></script>
-    <script src="app.js?v=5"></script>
+    <script src="config.js?v=6"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="engine.js?v=6"></script>
+    <script src="cat-sprite.js?v=6"></script>
+    <script src="app.js?v=6"></script>
 </body>
 </html>

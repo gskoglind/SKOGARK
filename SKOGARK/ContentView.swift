@@ -1,5 +1,15 @@
 import SwiftUI
 import UIKit
+import AVFoundation
+import WebKit
+import MapKit
+
+/// Configuration for the optional live-ship map. Set `vesselAPIBase` to the URL
+/// of your deployed AIS proxy (see server/README.md) to enable the in-app map
+/// and Captain Mike naming a real nearby ship. Leave it `nil` to hide those.
+enum RiverboatConfig {
+    static let vesselAPIBase: String? = nil
+}
 
 @main struct MyApp: App {
     var body: some Scene {
@@ -91,6 +101,19 @@ struct GameView: View {
     @State private var command = ""
     @FocusState private var inputFocused: Bool
 
+    // Spoken narration. Captain Mike's narration and room descriptions are read
+    // aloud; command echoes are never spoken. The toggle is remembered.
+    @AppStorage("skogark.voice") private var voiceOn = true
+    @State private var narrator = Narrator()
+    @State private var spokenCount = 0
+
+    // Live webcams / ship map (riverboat only).
+    @State private var showCams = false
+    @State private var showShips = false
+    @State private var announcedShip = false
+
+    private var isRiverboat: Bool { game.scenario.id == "riverboat" }
+
     // Transient "you have arrived" location card.
     @State private var flashTitle: String?
     @State private var flashOpacity: Double = 0
@@ -107,8 +130,56 @@ struct GameView: View {
         .background(backgroundView)
         .overlay(alignment: .bottomTrailing) { catSprite }
         .overlay(alignment: .top) { locationFlash }
-        .onAppear { flashLocation(game.roomTitle) }
-        .onChange(of: game.roomID) { flashLocation(game.roomTitle) }
+        .onAppear { flashLocation(game.roomTitle); speakPending() }
+        .onChange(of: game.roomID) { flashLocation(game.roomTitle); announceShipIfNeeded() }
+        .onChange(of: game.transcript.count) { speakPending() }
+        .onDisappear { narrator.stop() }
+        .sheet(isPresented: $showCams) {
+            CamsView(initialSlug: Self.camSlug(for: game.roomID))
+        }
+        .sheet(isPresented: $showShips) {
+            if let base = RiverboatConfig.vesselAPIBase {
+                ShipMapView(apiBase: base)
+            }
+        }
+    }
+
+    /// The SavannahCams webcam that best matches the boat's current leg.
+    static func camSlug(for roomID: String) -> String {
+        if roomID == "fortJackson" { return "fort-jackson" }
+        if roomID.hasPrefix("bridge") { return "talmadge-bridge" }
+        if roomID.hasPrefix("port") { return "pilots-dock" }
+        return "river-street-east" // River Street leg (and the dock)
+    }
+
+    /// As the boat passes the working river, Captain Mike names a real ship out
+    /// there right now (best-effort; needs a configured proxy, ignores errors).
+    private func announceShipIfNeeded() {
+        guard let base = RiverboatConfig.vesselAPIBase, isRiverboat,
+              game.roomID.hasPrefix("port"), !announcedShip,
+              let url = URL(string: base + "/vessels") else { return }
+        announcedShip = true
+        Task {
+            guard let (data, _) = try? await URLSession.shared.data(from: url),
+                  let resp = try? JSONDecoder().decode(VesselResponse.self, from: data),
+                  let ship = resp.vessels.first(where: { !($0.name ?? "").isEmpty }) else { return }
+            await MainActor.run {
+                game.emit("Captain Mike: \"And there she is — the \(ship.name!), a \(ship.kind ?? "vessel") sharing the river with us right now.\"")
+            }
+        }
+    }
+
+    /// Speaks any transcript entries added since the last check (skipping the
+    /// player's own typed commands). The counter always advances, so toggling
+    /// the voice on later doesn't replay a backlog.
+    private func speakPending() {
+        let entries = game.transcript
+        guard spokenCount < entries.count else { return }
+        let fresh = entries[spokenCount..<entries.count]
+        spokenCount = entries.count
+        guard voiceOn else { return }
+        let text = fresh.filter { !$0.isCommand }.map(\.text).joined(separator: "\n")
+        narrator.speak(text)
     }
 
     /// A location name that fades in when the player arrives somewhere new,
@@ -241,6 +312,34 @@ struct GameView: View {
             Text(game.scenario.title)
                 .font(.system(.subheadline, design: .monospaced).weight(.semibold))
                 .foregroundStyle(Color(white: 0.7))
+            Button {
+                voiceOn.toggle()
+                if !voiceOn { narrator.stop() }
+            } label: {
+                Image(systemName: voiceOn ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                    .font(.subheadline)
+            }
+            .foregroundStyle(voiceOn ? .green : Color(white: 0.5))
+            .padding(.leading, 12)
+            .accessibilityLabel(voiceOn ? "Mute narration" : "Unmute narration")
+
+            if isRiverboat {
+                Button { showCams = true } label: {
+                    Image(systemName: "video.fill").font(.subheadline)
+                }
+                .foregroundStyle(.green)
+                .padding(.leading, 12)
+                .accessibilityLabel("Live webcams")
+
+                if RiverboatConfig.vesselAPIBase != nil {
+                    Button { showShips = true } label: {
+                        Image(systemName: "map.fill").font(.subheadline)
+                    }
+                    .foregroundStyle(.green)
+                    .padding(.leading, 12)
+                    .accessibilityLabel("Live ship map")
+                }
+            }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
@@ -298,8 +397,199 @@ struct GameView: View {
     private func submit() {
         let entered = command
         command = ""
+        narrator.stop() // cut off any narration still playing from the last turn
         game.process(entered)
         inputFocused = true
+    }
+}
+
+/// Reads game narration aloud using the system speech synthesizer. Decorative
+/// rule lines (the banner's ─────) and blank lines are dropped so the utterance
+/// sounds like prose.
+final class Narrator {
+    private let synthesizer = AVSpeechSynthesizer()
+
+    func speak(_ text: String) {
+        let say = Narrator.speakable(text)
+        guard !say.isEmpty else { return }
+        let utterance = AVSpeechUtterance(string: say)
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+        utterance.pitchMultiplier = 0.95 // a touch lower for Captain Mike
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        synthesizer.speak(utterance)
+    }
+
+    func stop() {
+        synthesizer.stopSpeaking(at: .immediate)
+    }
+
+    private static let decorative = Set(" ─—-=_\t")
+
+    private static func speakable(_ text: String) -> String {
+        text.split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+            .filter { line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                return !trimmed.isEmpty && !trimmed.allSatisfy { decorative.contains($0) }
+            }
+            .joined(separator: ". ")
+    }
+}
+
+// MARK: - Live Webcams
+
+/// A minimal WKWebView wrapper for embedding a live webcam page.
+struct WebView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.scrollView.isScrollEnabled = false
+        webView.isOpaque = false
+        webView.backgroundColor = .black
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        if webView.url != url {
+            webView.load(URLRequest(url: url))
+        }
+    }
+}
+
+/// The SavannahCams live webcams along the river, embedded in a sheet with a
+/// picker. Opens on the camera matching the boat's current leg.
+struct CamsView: View {
+    let initialSlug: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var slug: String
+
+    static let base = "https://www.savannahcams.com/streams/cam_"
+    static let cams: [(slug: String, label: String)] = [
+        ("river-street-east", "River Street East (the riverboat!)"),
+        ("river-street-west", "River Street West"),
+        ("pilots-dock", "Savannah Pilots Dock"),
+        ("savannah-yacht-facility", "Savannah Yacht Facility"),
+        ("talmadge-bridge", "Talmadge Bridge"),
+        ("fort-jackson", "Old Fort Jackson"),
+        ("elba-island", "Elba Island"),
+    ]
+
+    init(initialSlug: String) {
+        self.initialSlug = initialSlug
+        _slug = State(initialValue: initialSlug)
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                if let url = URL(string: Self.base + slug + ".html") {
+                    WebView(url: url)
+                }
+                Text("Live webcams courtesy of SavannahCams.com")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(8)
+            }
+            .navigationTitle("River Cams")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Picker("Camera", selection: $slug) {
+                        ForEach(Self.cams, id: \.slug) { cam in
+                            Text(cam.label).tag(cam.slug)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Live Ship Map
+
+/// One vessel from the AIS proxy's /vessels feed.
+struct Vessel: Identifiable, Decodable {
+    let mmsi: Int
+    let name: String?
+    let lat: Double
+    let lon: Double
+    let sog: Double?
+    let kind: String?
+
+    var id: Int { mmsi }
+    var coordinate: CLLocationCoordinate2D { .init(latitude: lat, longitude: lon) }
+}
+
+struct VesselResponse: Decodable {
+    let vessels: [Vessel]
+}
+
+/// A live map of vessels on the Savannah River, polled from the AIS proxy.
+struct ShipMapView: View {
+    let apiBase: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var vessels: [Vessel] = []
+    @State private var status = "Loading live ship positions…"
+
+    private static let savannah = MapCameraPosition.region(
+        MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: 32.083, longitude: -81.09),
+            span: MKCoordinateSpan(latitudeDelta: 0.15, longitudeDelta: 0.15)
+        )
+    )
+
+    var body: some View {
+        NavigationStack {
+            Map(initialPosition: Self.savannah) {
+                ForEach(vessels) { vessel in
+                    Marker(vessel.name ?? "Vessel", systemImage: "ferry.fill", coordinate: vessel.coordinate)
+                        .tint(.green)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                Text(status)
+                    .font(.footnote)
+                    .padding(8)
+                    .background(.black.opacity(0.6), in: Capsule())
+                    .foregroundStyle(.white)
+                    .padding(.bottom, 12)
+            }
+            .navigationTitle("Ships on the River")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .task { await pollLoop() }
+        }
+    }
+
+    private func pollLoop() async {
+        while !Task.isCancelled {
+            await fetchOnce()
+            try? await Task.sleep(for: .seconds(30))
+        }
+    }
+
+    private func fetchOnce() async {
+        guard let url = URL(string: apiBase + "/vessels") else { return }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let resp = try JSONDecoder().decode(VesselResponse.self, from: data)
+            vessels = resp.vessels
+            status = "\(resp.vessels.count) vessel\(resp.vessels.count == 1 ? "" : "s") nearby · updated just now"
+        } catch {
+            status = "Couldn't reach the ship feed."
+        }
     }
 }
 
