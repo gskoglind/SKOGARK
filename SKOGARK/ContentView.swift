@@ -435,13 +435,22 @@ struct GameView: View {
 final class Narrator {
     private let synthesizer = AVSpeechSynthesizer()
 
+    /// Captain Mike's voice: a male English voice, chosen once. Falls back to
+    /// the default en-US voice if the device has no male voice installed.
+    private static let voice: AVSpeechSynthesisVoice? = {
+        let english = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix("en") }
+        return english.first(where: { $0.gender == .male && $0.language == "en-US" })
+            ?? english.first(where: { $0.gender == .male })
+            ?? AVSpeechSynthesisVoice(language: "en-US")
+    }()
+
     func speak(_ text: String) {
         let say = Narrator.speakable(text)
         guard !say.isEmpty else { return }
         let utterance = AVSpeechUtterance(string: say)
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         utterance.pitchMultiplier = 0.95 // a touch lower for Captain Mike
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        utterance.voice = Narrator.voice
         synthesizer.speak(utterance)
     }
 

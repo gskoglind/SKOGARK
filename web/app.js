@@ -93,9 +93,15 @@
         if (!synth) return;
         const voices = synth.getVoices();
         if (!voices.length) return;
-        // Prefer an English voice; nothing critical rides on the exact pick.
-        narrator = voices.find((v) => /en[-_]US/i.test(v.lang))
-            || voices.find((v) => /^en/i.test(v.lang))
+        // Captain Mike is male: prefer a male-sounding English voice. Voice
+        // gender isn't standardized, so match on name (best-effort). Common
+        // male voices: "…Male", Alex, Fred, Daniel, David, George, etc.
+        const en = voices.filter((v) => /^en/i.test(v.lang));
+        const male = en.find((v) =>
+            /\b(male|alex|fred|daniel|david|george|james|arthur|gordon|aaron|reed|rocko|eddy|tom|guy|rishi|oliver)\b/i.test(v.name));
+        narrator = male
+            || en.find((v) => /en[-_]US/i.test(v.lang))
+            || en[0]
             || voices[0];
     }
     if (synth) {
