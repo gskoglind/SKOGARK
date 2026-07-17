@@ -530,6 +530,8 @@ final class Game {
             return
         }
         guard item.isTakeable else {
+            // "Take the 1pm cruise" reads as boarding it, not pocketing it.
+            if let dir = scenario.portalDirection?(self, id) { move(dir); return }
             emit("You can't take the \(item.name).")
             return
         }

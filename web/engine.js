@@ -399,7 +399,12 @@ class Game {
         if (!item) { this.emit("You don't see that here."); return; }
         if (this.inventory.includes(id)) { this.emit(`You're already carrying the ${item.name}.`); return; }
         if (item.forSale) { this.emit("That's for sale — you'll have to BUY it."); return; }
-        if (!item.isTakeable) { this.emit(`You can't take the ${item.name}.`); return; }
+        if (!item.isTakeable) {
+            // "Take the 1pm cruise" reads as boarding it, not pocketing it.
+            const dir = this.scenario.portalDirection ? this.scenario.portalDirection(this, id) : null;
+            if (dir) { this.move(dir); return; }
+            this.emit(`You can't take the ${item.name}.`); return;
+        }
         this.removeItemFromWorld(id);
         this.inventory.push(id);
         if (this.scenario.onTake) this.scenario.onTake(this, id);
