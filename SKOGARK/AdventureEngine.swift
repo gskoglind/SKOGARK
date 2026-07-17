@@ -1239,6 +1239,7 @@ extension Game {
                 } else if roomID.hasPrefix("waving"), !game.has(flag: "sawWaving") {
                     game.set(flag: "sawWaving")
                     game.emit("Captain Mike: \"That little white figure on the point is the Waving Girl — Florence Martus, who for forty-four years greeted every ship entering the port, waving a handkerchief by day and a lantern by night. These marshes carried Savannah's cotton and naval stores out to the world.\"")
+                    game.emit("Captain Mike: \"Now, those refineries coming up on the bank — that's my favorite. See those big piles? That's the cereal. And those three tall silos yonder? Whole milk, oat milk, and skim. Biggest bowl of breakfast on the Georgia coast — all we're missing is a spoon the size of the Talmadge Bridge!\"")
                 }
             },
             hintStage: { game in
@@ -1582,7 +1583,7 @@ private func buildRiverboatWorld() -> (rooms: [String: Room], items: [String: It
              description: "The sightseeing lounge; the little white statue of the Waving Girl slips by on the point. Stairs lead UP and DOWN.",
              exits: [.up: "wavingD4", .down: "wavingD2"]))
     add(Room(id: "wavingD4", title: "Fourth Deck — Open-Air Deck",
-             description: "The open-air deck along the eastern riverfront, Old Fort Jackson now not far downriver. Continue EAST; stairs lead DOWN.",
+             description: "The open-air deck along the eastern riverfront; riverside refineries — great heaped piles and three tall silos — slide past as Old Fort Jackson comes into view downriver. Continue EAST; stairs lead DOWN.",
              exits: [.east: "fortJackson", .down: "wavingD3"],
              items: ["captain"]))
 
