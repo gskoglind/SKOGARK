@@ -249,7 +249,8 @@ final class Game {
             }
         case "what", "survey":
             lookAround()
-        case "go", "walk", "run", "climb", "enter", "crawl", "cross", "board", "sail", "depart":
+        case "go", "walk", "run", "climb", "enter", "crawl", "cross",
+             "board", "sail", "depart", "choose", "select", "ride", "catch", "join":
             handleGo(rest)
         case "examine", "x", "inspect", "read":
             if verb == "read" { readItem(rest) } else { examine(rest) }
@@ -296,14 +297,20 @@ final class Game {
         case "restart":
             restart()
         default:
-            emit("I don't know how to \"\(verb)\".")
+            // Naming a portal with no verb (e.g. a cruise by time or name at
+            // the dock) is taken as "go through it".
+            if let id = resolveItem(tokens), let dir = scenario.portalDirection?(self, id) {
+                move(dir)
+            } else {
+                emit("I don't know how to \"\(verb)\".")
+            }
         }
     }
 
     private func tokenize(_ input: String) -> [String] {
         let filler: Set<String> = ["the", "a", "an", "to", "at", "my", "some"]
         return input.lowercased()
-            .split(whereSeparator: { !$0.isLetter })
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
             .map(String.init)
             .filter { !filler.contains($0) }
     }
@@ -1443,11 +1450,11 @@ private func buildRiverboatWorld() -> (rooms: [String: Room], items: [String: It
     add(Item(id: "guests", name: "guests", nouns: ["guests", "guest", "passengers", "tourists", "crowd"],
              description: "Cheerful guests in sun hats and windbreakers, waiting to board.",
              isFixture: true, isCreature: true))
-    add(Item(id: "cannonCruise", name: "Cannon Cruise", nouns: ["cannon", "one", "noon", "first"],
+    add(Item(id: "cannonCruise", name: "Cannon Cruise", nouns: ["cannon", "one", "noon", "first", "1", "1pm"],
              description: "The 1:00 sailing — it includes a cannon salute at Old Fort Jackson.", isFixture: true))
-    add(Item(id: "afternoonCruise", name: "Afternoon Cruise", nouns: ["afternoon", "half", "three", "matinee"],
+    add(Item(id: "afternoonCruise", name: "Afternoon Cruise", nouns: ["afternoon", "half", "three", "matinee", "3", "3pm", "330", "30"],
              description: "The 3:30 sailing, an easy afternoon run to the fort and back.", isFixture: true))
-    add(Item(id: "sunsetCruise", name: "Sunset Cruise", nouns: ["sunset", "evening", "seven", "dusk"],
+    add(Item(id: "sunsetCruise", name: "Sunset Cruise", nouns: ["sunset", "evening", "seven", "dusk", "7", "7pm"],
              description: "The 7:00 sailing, timed to catch the sunset over the marshes.", isFixture: true))
 
     // Aboard and along the river.

@@ -127,6 +127,7 @@ class Game {
             case "go": case "walk": case "run": case "climb":
             case "enter": case "crawl": case "cross":
             case "board": case "sail": case "depart":
+            case "choose": case "select": case "ride": case "catch": case "join":
                 this.handleGo(rest);
                 break;
             case "examine": case "x": case "inspect": case "read":
@@ -195,15 +196,21 @@ class Game {
             case "restart":
                 this.startFresh(true);
                 break;
-            default:
-                this.emit(`I don't know how to "${verb}".`);
+            default: {
+                // Naming a portal with no verb (e.g. a cruise by time or name
+                // at the dock) is taken as "go through it".
+                const id = this.resolveItem(tokens);
+                const dir = (id && this.scenario.portalDirection) ? this.scenario.portalDirection(this, id) : null;
+                if (dir) this.move(dir);
+                else this.emit(`I don't know how to "${verb}".`);
+            }
         }
     }
 
     tokenize(input) {
         const filler = new Set(["the", "a", "an", "to", "at", "my", "some"]);
         return input.toLowerCase()
-            .split(/[^a-z]+/)
+            .split(/[^a-z0-9]+/)
             .filter((w) => w.length > 0 && !filler.has(w));
     }
 
@@ -1193,11 +1200,11 @@ function buildRiverboatWorld() {
     addItem({ id: "guests", name: "guests", nouns: ["guests", "guest", "passengers", "tourists", "crowd"],
         description: "Cheerful guests in sun hats and windbreakers, waiting to board.",
         isFixture: true, isCreature: true });
-    addItem({ id: "cannonCruise", name: "Cannon Cruise", nouns: ["cannon", "one", "noon", "first"],
+    addItem({ id: "cannonCruise", name: "Cannon Cruise", nouns: ["cannon", "one", "noon", "first", "1", "1pm"],
         description: "The 1:00 sailing — it includes a cannon salute at Old Fort Jackson.", isFixture: true });
-    addItem({ id: "afternoonCruise", name: "Afternoon Cruise", nouns: ["afternoon", "half", "three", "matinee"],
+    addItem({ id: "afternoonCruise", name: "Afternoon Cruise", nouns: ["afternoon", "half", "three", "matinee", "3", "3pm", "330", "30"],
         description: "The 3:30 sailing, an easy afternoon run to the fort and back.", isFixture: true });
-    addItem({ id: "sunsetCruise", name: "Sunset Cruise", nouns: ["sunset", "evening", "seven", "dusk"],
+    addItem({ id: "sunsetCruise", name: "Sunset Cruise", nouns: ["sunset", "evening", "seven", "dusk", "7", "7pm"],
         description: "The 7:00 sailing, timed to catch the sunset over the marshes.", isFixture: true });
 
     // Aboard and along the river.
