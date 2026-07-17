@@ -144,7 +144,8 @@
     let shipsMap = null;
     let shipsMarkers = null;
     let shipsTimer = null;
-    let namedShipAnnounced = false;
+    let announcedMMSIs = new Set(); // vessels Captain Mike has already called out
+    let lastShipLeg = null;         // so we announce at most once per cruise leg
 
     function ensureShipsMap() {
         if (shipsMap || !window.L) return;
@@ -198,17 +199,23 @@
 
     // As the boat passes the working river, Captain Mike names a real ship that
     // is out there right now (best-effort; network hiccups are ignored).
+    // A cruise leg id, e.g. "riverD4" -> "river" (the dock and fort have none).
+    function legOf(roomID) { return roomID.replace(/D\d+$/, ""); }
+
     async function maybeAnnounceShip() {
-        if (!VESSEL_API || namedShipAnnounced || !game) return;
-        if (game.scenario.id !== "riverboat" || !game.roomID.startsWith("port")) return;
-        namedShipAnnounced = true;
+        if (!VESSEL_API || !game || game.scenario.id !== "riverboat") return;
+        const legs = ["river", "port", "bridge", "city", "waving"];
+        const leg = legOf(game.roomID);
+        if (!legs.includes(leg) || leg === lastShipLeg) return; // once per leg
+        lastShipLeg = leg;
         try {
             const res = await fetch(VESSEL_API + "/vessels", { cache: "no-store" });
             const data = await res.json();
-            const named = (data.vessels || []).filter((v) => v.name);
-            if (!named.length) return;
-            const v = named[0];
-            game.emit(`Captain Mike: "And there she is — the ${v.name}, a ${v.kind || "vessel"} sharing the river with us right now."`);
+            const fresh = (data.vessels || []).filter((v) => v.name && !announcedMMSIs.has(v.mmsi));
+            if (!fresh.length) return;
+            const v = fresh[0];
+            announcedMMSIs.add(v.mmsi);
+            game.emit(`Captain Mike: "Off to the side, the ${v.name} — a ${v.kind || "vessel"} on the river with us."`);
             render();
         } catch (e) { /* keep the tour flowing regardless */ }
     }
@@ -283,7 +290,8 @@
         game = new Game(scenario);
         rendered = 0;
         lastRoomID = null;
-        namedShipAnnounced = false;
+        announcedMMSIs = new Set();
+        lastShipLeg = null;
         transcriptEl.textContent = "";
         gameTitle.textContent = scenario.title;
         // The live-ships map only makes sense on the riverboat, and only when a

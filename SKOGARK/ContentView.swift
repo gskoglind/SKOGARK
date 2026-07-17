@@ -110,7 +110,8 @@ struct GameView: View {
     // Live webcams / ship map (riverboat only).
     @State private var showCams = false
     @State private var showShips = false
-    @State private var announcedShip = false
+    @State private var announcedShipMMSIs: Set<Int> = []
+    @State private var lastShipLeg: String? = nil
 
     private var isRiverboat: Bool { game.scenario.id == "riverboat" }
 
@@ -154,17 +155,32 @@ struct GameView: View {
 
     /// As the boat passes the working river, Captain Mike names a real ship out
     /// there right now (best-effort; needs a configured proxy, ignores errors).
+    /// A cruise leg id, e.g. "riverD4" -> "river" (the dock and fort have none).
+    private func legOf(_ roomID: String) -> String {
+        if let r = roomID.range(of: "D[0-9]+$", options: .regularExpression) {
+            return String(roomID[..<r.lowerBound])
+        }
+        return roomID
+    }
+
+    /// Announces a different real nearby ship once per cruise leg (needs the
+    /// AIS proxy; silent otherwise, and network errors are ignored).
     private func announceShipIfNeeded() {
         guard let base = RiverboatConfig.vesselAPIBase, isRiverboat,
-              game.roomID.hasPrefix("port"), !announcedShip,
               let url = URL(string: base + "/vessels") else { return }
-        announcedShip = true
+        let legs: Set<String> = ["river", "port", "bridge", "city", "waving"]
+        let leg = legOf(game.roomID)
+        guard legs.contains(leg), leg != lastShipLeg else { return }
+        lastShipLeg = leg
         Task {
             guard let (data, _) = try? await URLSession.shared.data(from: url),
-                  let resp = try? JSONDecoder().decode(VesselResponse.self, from: data),
-                  let ship = resp.vessels.first(where: { !($0.name ?? "").isEmpty }) else { return }
+                  let resp = try? JSONDecoder().decode(VesselResponse.self, from: data) else { return }
             await MainActor.run {
-                game.emit("Captain Mike: \"And there she is — the \(ship.name!), a \(ship.kind ?? "vessel") sharing the river with us right now.\"")
+                guard let ship = resp.vessels.first(where: {
+                    !($0.name ?? "").isEmpty && !announcedShipMMSIs.contains($0.mmsi)
+                }) else { return }
+                announcedShipMMSIs.insert(ship.mmsi)
+                game.emit("Captain Mike: \"Off to the side, the \(ship.name!) — a \(ship.kind ?? "vessel") on the river with us.\"")
             }
         }
     }
