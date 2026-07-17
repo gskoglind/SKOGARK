@@ -194,6 +194,10 @@ struct GameView: View {
         let fresh = entries[spokenCount..<entries.count]
         spokenCount = entries.count
         guard voiceOn else { return }
+        // The cannon salute at Old Fort Jackson gets an audible boom.
+        if fresh.contains(where: { !$0.isCommand && $0.text.contains("BOOOM!") }) {
+            SoundEffects.shared.cannonBoom()
+        }
         let text = fresh.filter { !$0.isCommand }.map(\.text).joined(separator: "\n")
         narrator.speak(text)
     }
@@ -271,7 +275,7 @@ struct GameView: View {
     /// room, lit state (cellar), and whether the rug has been moved (living
     /// room) — so each transition cross-fades.
     private var sceneKey: String {
-        "\(game.roomID)-\(game.canSeeRoom)-\(game.has(flag: "rugMoved"))"
+        "\(game.roomID)-\(game.canSeeRoom)-\(game.has(flag: "rugMoved"))-\(game.has(flag: "cruise_sunset"))-\(game.has(flag: "cruise_afternoon"))"
     }
 
     /// The stray cat that loiters at the fishmonger's stall, hoping for a
@@ -302,6 +306,25 @@ struct GameView: View {
     /// variants (e.g. "bg_fishmonger_landscape" and "bg_fishmonger_portrait")
     /// to Assets.xcassets. Any room not listed here shows a black background.
     private func backgroundImageBaseName(for roomID: String) -> String? {
+        let base = dayBackgroundBaseName(for: roomID)
+        // The 7:00 Sunset Cruise swaps in warm dusk art for every on-board room
+        // (all four decks across the five legs, plus Old Fort Jackson): no
+        // narration, and a DJ throws a party up on the open-air top deck. The
+        // River Street dock keeps its daytime look — you pick the sailing before
+        // boarding, so the sunset flag isn't set there yet.
+        if let base, game.has(flag: "cruise_sunset"),
+           base.hasPrefix("bg_cruise_") || base == "bg_fort_jackson" {
+            return base + "_sunset"
+        }
+        // The 3:30 Afternoon cruise matches the 1:00 Cannon cruise everywhere
+        // except at the fort, where no salute is fired.
+        if base == "bg_fort_jackson", game.has(flag: "cruise_afternoon") {
+            return "bg_fort_jackson_afternoon"
+        }
+        return base
+    }
+
+    private func dayBackgroundBaseName(for roomID: String) -> String? {
         switch roomID {
         case "innKitchen":  return "bg_inn_kitchen"
         case "square":      return "bg_village_square"
@@ -313,6 +336,33 @@ struct GameView: View {
         case "kitchen":     return "bg_kitchen"
         case "livingRoom":  return game.has(flag: "rugMoved") ? "bg_living_room_open" : "bg_living_room"
         case "cellar":      return game.canSeeRoom ? "bg_cellar_lit" : "bg_cellar_dark"
+        // Savannah River cruise — a sightseeing tour down the river past the
+        // River Street riverfront. The dock, then four decks across five legs,
+        // and the finale at Old Fort Jackson (where the 1pm Cannon Cruise fires
+        // its salute). See the bg_cruise_* / bg_river_dock / bg_fort_jackson
+        // imagesets (each with _landscape and _portrait variants).
+        case "riverStreet": return "bg_river_dock"
+        case "riverD1":     return "bg_cruise_river_d1"
+        case "riverD2":     return "bg_cruise_river_d2"
+        case "riverD3":     return "bg_cruise_river_d3"
+        case "riverD4":     return "bg_cruise_river_d4"
+        case "portD1":      return "bg_cruise_port_d1"
+        case "portD2":      return "bg_cruise_port_d2"
+        case "portD3":      return "bg_cruise_port_d3"
+        case "portD4":      return "bg_cruise_port_d4"
+        case "bridgeD1":    return "bg_cruise_bridge_d1"
+        case "bridgeD2":    return "bg_cruise_bridge_d2"
+        case "bridgeD3":    return "bg_cruise_bridge_d3"
+        case "bridgeD4":    return "bg_cruise_bridge_d4"
+        case "cityD1":      return "bg_cruise_city_d1"
+        case "cityD2":      return "bg_cruise_city_d2"
+        case "cityD3":      return "bg_cruise_city_d3"
+        case "cityD4":      return "bg_cruise_city_d4"
+        case "wavingD1":    return "bg_cruise_waving_d1"
+        case "wavingD2":    return "bg_cruise_waving_d2"
+        case "wavingD3":    return "bg_cruise_waving_d3"
+        case "wavingD4":    return "bg_cruise_waving_d4"
+        case "fortJackson": return "bg_fort_jackson"
         default:            return nil
         }
     }
@@ -435,12 +485,13 @@ struct GameView: View {
 final class Narrator {
     private let synthesizer = AVSpeechSynthesizer()
 
-    /// Captain Mike's voice: a male English voice, chosen once. Falls back to
-    /// the default en-US voice if the device has no male voice installed.
+    /// Captain Mike's voice: a male American voice, chosen once. Stays American
+    /// throughout — falls back to any en-US voice, then the default en-US voice,
+    /// so the narrator never picks up a non-American accent.
     private static let voice: AVSpeechSynthesisVoice? = {
-        let english = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix("en") }
-        return english.first(where: { $0.gender == .male && $0.language == "en-US" })
-            ?? english.first(where: { $0.gender == .male })
+        let american = AVSpeechSynthesisVoice.speechVoices().filter { $0.language == "en-US" }
+        return american.first(where: { $0.gender == .male })
+            ?? american.first
             ?? AVSpeechSynthesisVoice(language: "en-US")
     }()
 
@@ -468,6 +519,66 @@ final class Narrator {
                 return !trimmed.isEmpty && !trimmed.allSatisfy { decorative.contains($0) }
             }
             .joined(separator: ". ")
+    }
+}
+
+// MARK: - Sound Effects
+
+/// Synthesizes short sound effects in code, so no audio-file assets are needed.
+/// Currently just the cannon salute at Old Fort Jackson.
+final class SoundEffects {
+    static let shared = SoundEffects()
+
+    private let engine = AVAudioEngine()
+    private let player = AVAudioPlayerNode()
+    private let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
+    private let boom: AVAudioPCMBuffer?
+
+    private init() {
+        boom = SoundEffects.makeBoom(format: format)
+        engine.attach(player)
+        try? engine.connectNode(player, to: engine.mainMixerNode, format: format)
+    }
+
+    /// Plays a deep cannon boom. Best-effort: silently does nothing if the audio
+    /// engine can't start.
+    func cannonBoom() {
+        guard let boom else { return }
+        player.scheduleBuffer(boom, at: nil, options: .interrupts, completionHandler: nil)
+        do {
+            if !engine.isRunning { try engine.start() }
+            try player.playAudio()
+        } catch {
+            return
+        }
+    }
+
+    /// Builds a ~0.9s boom: a low sine sweeping downward for the thump plus
+    /// heavily lowpassed white noise for the crack, both under a fast-attack
+    /// exponential decay.
+    private static func makeBoom(format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        let sampleRate = format.sampleRate
+        let duration = 0.9
+        let frameCount = AVAudioFrameCount(sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channel = buffer.floatChannelData?[0] else { return nil }
+        buffer.frameLength = frameCount
+
+        let twoPi = 2.0 * Double.pi
+        var phase = 0.0
+        var lpNoise = 0.0
+        for i in 0..<Int(frameCount) {
+            let progress = Double(i) / Double(frameCount)
+            let env = (1.0 - progress) * (1.0 - progress) // exponential-ish decay
+            let freq = 90.0 - 60.0 * progress             // 90 Hz -> 30 Hz sweep
+            phase += twoPi * freq / sampleRate
+            let tone = sin(phase)
+            let white = Double.random(in: -1.0...1.0)
+            lpNoise += 0.06 * (white - lpNoise)           // one-pole lowpass
+            let sample = (tone * 0.8 + lpNoise * 0.6) * env
+            channel[i] = Float(max(-1.0, min(1.0, sample)))
+        }
+        return buffer
     }
 }
 

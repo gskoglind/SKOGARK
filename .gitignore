@@ -19,3 +19,7 @@ build/
 # Swift Package Manager
 .build/
 .swiftpm/xcode/
+
+# Image-import artifacts from the Claude desktop app
+_to_delete/
+_skogark_import.zip

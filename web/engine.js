@@ -995,16 +995,24 @@ function riverboatScenario() {
             return false;
         },
         onEnterRoom(game, roomID) {
-            // Captain Mike narrates each new leg over the PA (once), no matter
-            // which of the four decks the passenger is on.
+            // Each new leg is announced once, no matter which of the four decks
+            // the passenger is on. The cannon and afternoon cruises get Captain
+            // Mike's narrated history; the 7 o'clock sunset cruise has no tour — a
+            // DJ works the open-air top deck instead, so the legs get party lines
+            // and the top deck plays dance music (see updateDanceMusic in app.js).
+            const sunset = game.has("cruise_sunset");
             if (roomID === "fortJackson") {
                 if (game.isWon) return;
-                game.emit("Captain Mike: \"Old Fort Jackson ahead is one of the oldest standing brick forts in the nation, guarding this bend of the river since the War of 1812 and held by Confederate defenders through the Civil War.\"");
+                if (sunset) {
+                    game.emit("The DJ eases into a mellow sunset anthem as Old Fort Jackson's brick ramparts drift past, glowing in the last of the light.");
+                } else {
+                    game.emit("Captain Mike: \"Old Fort Jackson ahead is one of the oldest standing brick forts in the nation, guarding this bend of the river since the War of 1812 and held by Confederate defenders through the Civil War.\"");
+                }
                 if (game.has("cruise_cannon")) {
                     game.emit("At Old Fort Jackson a cannon crew in period dress touches off the great gun — BOOOM! — a plume of white smoke and a salute that rolls across the water and thumps in your chest.");
                 }
                 let closing;
-                if (game.has("cruise_sunset")) {
+                if (sunset) {
                     closing = "Old Fort Jackson's brick ramparts glow in the last of the sunset as the boat turns for the lamplit run home to River Street.";
                 } else if (game.has("cruise_cannon")) {
                     closing = "With the cannon's echo still fading over the marsh, Captain Mike brings the boat about for the run home to River Street.";
@@ -1015,17 +1023,27 @@ function riverboatScenario() {
                 game.win(closing);
             } else if (roomID.startsWith("port") && !game.has("sawPort")) {
                 game.set("sawPort");
-                game.award(5, "Captain Mike: \"Off to starboard lies the Port of Savannah, one of the busiest in the nation. Towering container ships ride the channel while stout tugboats shoulder them to their berths.\"");
+                game.award(5, sunset
+                    ? "The DJ on the top deck kicks off the night — a thumping bassline rolls out over the water and the dance floor fills as the lit-up Port of Savannah slides past in the dusk."
+                    : "Captain Mike: \"Off to starboard lies the Port of Savannah, one of the busiest in the nation. Towering container ships ride the channel while stout tugboats shoulder them to their berths.\"");
             } else if (roomID.startsWith("bridge") && !game.has("sawBridge")) {
                 game.set("sawBridge");
-                game.award(5, "Captain Mike: \"Overhead soars the Talmadge Memorial Bridge, its cables strung like a harp above the river. Here we come about for the slow run downriver.\" (Head EAST to continue to Old Fort Jackson.)");
+                game.award(5, sunset
+                    ? "The boat swings around beneath the Talmadge Bridge, its lights flickering on against the purple sky, and the DJ drops the beat — the whole top deck throws their hands up. (Head EAST to continue to Old Fort Jackson.)"
+                    : "Captain Mike: \"Overhead soars the Talmadge Memorial Bridge, its cables strung like a harp above the river. Here we come about for the slow run downriver.\" (Head EAST to continue to Old Fort Jackson.)");
             } else if (roomID.startsWith("city") && !game.has("sawCity")) {
                 game.set("sawCity");
-                game.emit("Captain Mike: \"Savannah was founded in 1733 by General James Oglethorpe — the last of the thirteen colonies, laid out in that famous grid of leafy squares you can still walk today. That gold dome is City Hall; beside it stands the old Cotton Exchange, from the days when Savannah set the world's price for cotton. And from this very river, in 1819, the SS Savannah steamed off to become the first steamship to cross the Atlantic.\"");
+                game.emit(sunset
+                    ? "Downtown Savannah glitters past as the DJ mixes into a deep, rolling groove and glow sticks trace the rail."
+                    : "Captain Mike: \"Savannah was founded in 1733 by General James Oglethorpe — the last of the thirteen colonies, laid out in that famous grid of leafy squares you can still walk today. That gold dome is City Hall; beside it stands the old Cotton Exchange, from the days when Savannah set the world's price for cotton. And from this very river, in 1819, the SS Savannah steamed off to become the first steamship to cross the Atlantic.\"");
             } else if (roomID.startsWith("waving") && !game.has("sawWaving")) {
                 game.set("sawWaving");
-                game.emit("Captain Mike: \"That little white figure on the point is the Waving Girl — Florence Martus, who for forty-four years greeted every ship entering the port, waving a handkerchief by day and a lantern by night. These marshes carried Savannah's cotton and naval stores out to the world.\"");
-                game.emit("Captain Mike: \"Now, those refineries coming up on the bank — that's my favorite. See those big piles? That's the cereal. And those three tall silos yonder? Whole milk, oat milk, and skim. Biggest bowl of breakfast on the Georgia coast — all we're missing is a spoon the size of the Talmadge Bridge!\"");
+                if (sunset) {
+                    game.emit("The DJ cues a floor-filler and the whole boat sings along, waving at a passing freighter — an old Savannah tradition, remixed.");
+                } else {
+                    game.emit("Captain Mike: \"That little white figure on the point is the Waving Girl — Florence Martus, who for forty-four years greeted every ship entering the port, waving a handkerchief by day and a lantern by night. These marshes carried Savannah's cotton and naval stores out to the world.\"");
+                    game.emit("Captain Mike: \"Now, those refineries coming up on the bank — that's my favorite. See those big piles? That's the cereal. And those three tall silos yonder? Whole milk, oat milk, and skim. Biggest bowl of breakfast on the Georgia coast — all we're missing is a spoon the size of the Talmadge Bridge!\"");
+                }
             }
         },
         hintStage(game) {

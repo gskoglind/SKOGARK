@@ -49,6 +49,30 @@
         westOfHouse: "bg_west_of_house",
         behindHouse: "bg_behind_house",
         kitchen:     "bg_kitchen",
+        // Savannah River cruise — a sightseeing tour down the river past the
+        // River Street riverfront, ending at Old Fort Jackson.
+        riverStreet: "bg_river_dock",
+        riverD1:     "bg_cruise_river_d1",
+        riverD2:     "bg_cruise_river_d2",
+        riverD3:     "bg_cruise_river_d3",
+        riverD4:     "bg_cruise_river_d4",
+        portD1:      "bg_cruise_port_d1",
+        portD2:      "bg_cruise_port_d2",
+        portD3:      "bg_cruise_port_d3",
+        portD4:      "bg_cruise_port_d4",
+        bridgeD1:    "bg_cruise_bridge_d1",
+        bridgeD2:    "bg_cruise_bridge_d2",
+        bridgeD3:    "bg_cruise_bridge_d3",
+        bridgeD4:    "bg_cruise_bridge_d4",
+        cityD1:      "bg_cruise_city_d1",
+        cityD2:      "bg_cruise_city_d2",
+        cityD3:      "bg_cruise_city_d3",
+        cityD4:      "bg_cruise_city_d4",
+        wavingD1:    "bg_cruise_waving_d1",
+        wavingD2:    "bg_cruise_waving_d2",
+        wavingD3:    "bg_cruise_waving_d3",
+        wavingD4:    "bg_cruise_waving_d4",
+        fortJackson: "bg_fort_jackson",
         // livingRoom and cellar are state-dependent — see backgroundBase().
     };
     // Inlined data-URI sprite (see cat-sprite.js); falls back to a file if absent.
@@ -65,7 +89,20 @@
         if (roomID === "livingRoom") {
             return (game && game.has("rugMoved")) ? "bg_living_room_open" : "bg_living_room";
         }
-        return ROOM_BACKGROUNDS[roomID] || null;
+        const base = ROOM_BACKGROUNDS[roomID] || null;
+        // The 7:00 Sunset Cruise swaps in warm dusk art (no narration; a DJ
+        // parties on the top deck) for every on-board room plus Old Fort Jackson.
+        // The pre-boarding River Street dock keeps its daytime look.
+        if (base && game && game.has && game.has("cruise_sunset") &&
+            (base.indexOf("bg_cruise_") === 0 || base === "bg_fort_jackson")) {
+            return base + "_sunset";
+        }
+        // The 3:30 Afternoon cruise matches the 1:00 Cannon cruise everywhere
+        // except at the fort, where no salute is fired.
+        if (base === "bg_fort_jackson" && game && game.has && game.has("cruise_afternoon")) {
+            return "bg_fort_jackson_afternoon";
+        }
+        return base;
     }
 
     // Resolves a room to its orientation-appropriate background URL (or null).
@@ -88,27 +125,69 @@
         catch (e) { return true; }
     })();
     let narrator = null; // chosen SpeechSynthesisVoice, once available
+    let voicesReady = false; // true once the voice list has actually loaded
+    let pendingText = null; // narration requested before voices were ready
 
     function pickVoice() {
         if (!synth) return;
         const voices = synth.getVoices();
         if (!voices.length) return;
-        // Captain Mike is male: prefer a male-sounding English voice. Voice
-        // gender isn't standardized, so match on name (best-effort). Common
-        // male voices: "…Male", Alex, Fred, Daniel, David, George, etc.
-        const en = voices.filter((v) => /^en/i.test(v.lang));
-        const male = en.find((v) =>
-            /\b(male|alex|fred|daniel|david|george|james|arthur|gordon|aaron|reed|rocko|eddy|tom|guy|rishi|oliver)\b/i.test(v.name));
-        narrator = male
-            || en.find((v) => /en[-_]US/i.test(v.lang))
-            || en[0]
-            || voices[0];
+        // One-time dump of everything Chrome exposes, so voice problems can be
+        // diagnosed from the console (name / lang / local vs. remote / default).
+        if (!pickVoice._dumped) {
+            pickVoice._dumped = true;
+            console.info("SKOGARK available voices:",
+                voices.map((v) => v.name + " (" + v.lang + ")"
+                    + (v.localService ? " local" : " REMOTE")
+                    + (v.default ? " default" : "")));
+        }
+        const enUS = voices.filter((v) => /en[-_]US/i.test(v.lang));
+        const isMale = (v) =>
+            /\b(male|alex|fred|david|aaron|reed|rocko|eddy|tom|guy|junior|ralph)\b/i.test(v.name);
+        // Prefer a LOCAL en-US voice: remote voices like "Google US English"
+        // are network-backed and Chrome often fails to load them, silently
+        // falling back to another (here, British) default. A local voice is
+        // reliable and unmistakably American. Order of preference:
+        //   local male → local any → remote male → remote any.
+        // Only ever assign an en-US voice; never a non-US object, since an
+        // explicit utterance.voice overrides utterance.lang and would defeat
+        // the "en-US" language request. When none exists, leave narrator null
+        // and let the "en-US" lang on the utterance drive pronunciation.
+        const enUSLocal = enUS.filter((v) => v.localService);
+        narrator = enUSLocal.find(isMale) || enUSLocal[0]
+            || enUS.find(isMale) || enUS[0] || null;
+        if (narrator) {
+            console.info("SKOGARK narrator voice:", narrator.name, "(" + narrator.lang + ")",
+                narrator.localService ? "local" : "REMOTE");
+        } else {
+            console.warn("SKOGARK: no en-US voice installed; relying on lang='en-US'. "
+                + "Install a US English voice for a proper American narrator.");
+        }
+        // The voice list is loaded now. Release any narration that arrived
+        // before it, so the first line isn't spoken in Chrome's default voice.
+        voicesReady = true;
+        if (pendingText !== null) {
+            const text = pendingText;
+            pendingText = null;
+            speak(text);
+        }
     }
     if (synth) {
         pickVoice();
         if (typeof synth.addEventListener === "function") {
             synth.addEventListener("voiceschanged", pickVoice);
         }
+        // Safety net: some Chrome states never fire "voiceschanged". Don't lose
+        // narration forever — after a short wait, speak with whatever we have.
+        setTimeout(function () {
+            if (voicesReady) return;
+            voicesReady = true;
+            if (pendingText !== null) {
+                const text = pendingText;
+                pendingText = null;
+                speak(text);
+            }
+        }, 1200);
     }
 
     // Strip decorative rule lines and collapse whitespace so the utterance
@@ -123,16 +202,74 @@
 
     function speak(text) {
         if (!voiceOn || !synth) return;
+        // If the voice list hasn't loaded yet, speaking now lets Chrome use its
+        // default voice (often British) and ignore our en-US request. Stash the
+        // latest line instead; pickVoice flushes it once a US voice is chosen.
+        if (!voicesReady) { pendingText = text; return; }
         const say = speakable(text);
         if (!say) return;
         const utterance = new SpeechSynthesisUtterance(say);
         if (narrator) utterance.voice = narrator;
+        utterance.lang = "en-US"; // force US English pronunciation
         utterance.rate = 1.0;
         utterance.pitch = 0.95; // a touch lower for Captain Mike
         synth.speak(utterance);
     }
 
     function stopSpeaking() { if (synth) synth.cancel(); }
+
+    // Synthesized cannon salute for Old Fort Jackson — a deep, decaying boom
+    // built with the Web Audio API so no sound-file asset is needed. Shares the
+    // narration mute (voiceOn): a low sine sweep for the thump plus a lowpassed
+    // noise burst for the crack, both under a fast-attack exponential decay.
+    let audioCtx = null;
+    function playCannonBoom() {
+        if (!voiceOn) return;
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        try {
+            if (!audioCtx) audioCtx = new AC();
+            if (audioCtx.state === "suspended") audioCtx.resume();
+            const ctx = audioCtx;
+            const now = ctx.currentTime;
+            const master = ctx.createGain();
+            master.gain.setValueAtTime(0.9, now);
+            master.connect(ctx.destination);
+
+            // Low-frequency thump: a sine sweeping down from 90 Hz to 30 Hz.
+            const osc = ctx.createOscillator();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(90, now);
+            osc.frequency.exponentialRampToValueAtTime(30, now + 0.5);
+            const oscGain = ctx.createGain();
+            oscGain.gain.setValueAtTime(1.0, now);
+            oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+            osc.connect(oscGain).connect(master);
+            osc.start(now);
+            osc.stop(now + 0.95);
+
+            // Noise burst for the crack, lowpassed so it booms rather than hisses.
+            const dur = 0.9;
+            const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+            const chan = buffer.getChannelData(0);
+            for (let i = 0; i < chan.length; i++) {
+                const decay = 1 - i / chan.length;
+                chan[i] = (Math.random() * 2 - 1) * decay * decay;
+            }
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+            const lp = ctx.createBiquadFilter();
+            lp.type = "lowpass";
+            lp.frequency.setValueAtTime(400, now);
+            lp.frequency.exponentialRampToValueAtTime(120, now + 0.4);
+            const noiseGain = ctx.createGain();
+            noiseGain.gain.setValueAtTime(0.8, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+            noise.connect(lp).connect(noiseGain).connect(master);
+            noise.start(now);
+            noise.stop(now + dur);
+        } catch (e) { /* audio is best-effort */ }
+    }
 
     function updateVoiceButton() {
         voiceButton.setAttribute("aria-pressed", String(voiceOn));
@@ -330,7 +467,7 @@
     function updateScene() {
         if (!game) return;
         const roomID = game.roomID;
-        const sceneKey = roomID + "|" + game.canSee() + "|" + game.has("rugMoved");
+        const sceneKey = roomID + "|" + game.canSee() + "|" + game.has("rugMoved") + "|" + game.has("cruise_sunset") + "|" + game.has("cruise_afternoon");
         if (sceneKey === lastSceneKey) return;   // nothing visual changed
         const roomChanged = roomID !== lastRoomID;
         lastSceneKey = sceneKey;
@@ -388,7 +525,11 @@
             div.className = "entry " + (entry.isCommand ? "cmd" : "out");
             div.textContent = entry.text;
             fragment.appendChild(div);
-            if (!entry.isCommand) spoken.push(entry.text);
+            if (!entry.isCommand) {
+                spoken.push(entry.text);
+                // The cannon salute at Old Fort Jackson gets an audible boom.
+                if (entry.text.indexOf("BOOOM!") !== -1) playCannonBoom();
+            }
         }
         transcriptEl.appendChild(fragment);
         rendered = game.transcript.length;
