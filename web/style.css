@@ -141,8 +141,9 @@ body {
 
 #titlebar {
     display: flex;
+    flex-wrap: wrap;   /* let controls wrap to a second row instead of vanishing */
     align-items: center;
-    gap: 12px;
+    gap: 8px 12px;
     padding: 8px 16px;
     border-bottom: 1px solid #222;
     background: rgba(0, 0, 0, 0.55);   /* translucent so artwork shows behind */
@@ -165,6 +166,7 @@ body {
     font-weight: 600;
 }
 
+#hintButton,
 #voiceButton {
     background: transparent;
     border: 1px solid #333;

@@ -16,6 +16,7 @@
     const goButton = form.querySelector("button[type=submit]");
     const menuButton = document.getElementById("menuButton");
     const gameTitle = document.getElementById("gameTitle");
+    const hintButton = document.getElementById("hintButton");
     const voiceButton = document.getElementById("voiceButton");
     const sceneLayers = [document.getElementById("sceneA"), document.getElementById("sceneB")];
     const locationFlash = document.getElementById("locationFlash");
@@ -410,6 +411,13 @@
         input.focus();
     });
 
+    hintButton.addEventListener("click", function () {
+        if (!game) return;
+        stopSpeaking();
+        game.process("hint");
+        render();
+        input.focus();
+    });
     shipsButton.addEventListener("click", openShips);
     shipsClose.addEventListener("click", closeShips);
     camsButton.addEventListener("click", openCams);

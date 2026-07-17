@@ -313,6 +313,16 @@ struct GameView: View {
                 .font(.system(.subheadline, design: .monospaced).weight(.semibold))
                 .foregroundStyle(Color(white: 0.7))
             Button {
+                narrator.stop()
+                game.process("hint")
+                inputFocused = true
+            } label: {
+                Image(systemName: "lightbulb.fill").font(.subheadline)
+            }
+            .foregroundStyle(.yellow)
+            .padding(.leading, 12)
+            .accessibilityLabel("Hint")
+            Button {
                 voiceOn.toggle()
                 if !voiceOn { narrator.stop() }
             } label: {
