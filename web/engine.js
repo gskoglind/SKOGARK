@@ -999,6 +999,7 @@ function riverboatScenario() {
             // which of the four decks the passenger is on.
             if (roomID === "fortJackson") {
                 if (game.isWon) return;
+                game.emit("Captain Mike: \"Old Fort Jackson ahead is one of the oldest standing brick forts in the nation, guarding this bend of the river since the War of 1812 and held by Confederate defenders through the Civil War.\"");
                 if (game.has("cruise_cannon")) {
                     game.emit("At Old Fort Jackson a cannon crew in period dress touches off the great gun — BOOOM! — a plume of white smoke and a salute that rolls across the water and thumps in your chest.");
                 }
@@ -1017,7 +1018,13 @@ function riverboatScenario() {
                 game.award(5, "Captain Mike: \"Off to starboard lies the Port of Savannah, one of the busiest in the nation. Towering container ships ride the channel while stout tugboats shoulder them to their berths.\"");
             } else if (roomID.startsWith("bridge") && !game.has("sawBridge")) {
                 game.set("sawBridge");
-                game.award(5, "Captain Mike: \"Overhead soars the Talmadge Memorial Bridge, its cables strung like a harp above the river. Here we come about for the run downriver.\" (Head EAST to continue to Old Fort Jackson.)");
+                game.award(5, "Captain Mike: \"Overhead soars the Talmadge Memorial Bridge, its cables strung like a harp above the river. Here we come about for the slow run downriver.\" (Head EAST to continue to Old Fort Jackson.)");
+            } else if (roomID.startsWith("city") && !game.has("sawCity")) {
+                game.set("sawCity");
+                game.emit("Captain Mike: \"Savannah was founded in 1733 by General James Oglethorpe — the last of the thirteen colonies, laid out in that famous grid of leafy squares you can still walk today. That gold dome is City Hall; beside it stands the old Cotton Exchange, from the days when Savannah set the world's price for cotton. And from this very river, in 1819, the SS Savannah steamed off to become the first steamship to cross the Atlantic.\"");
+            } else if (roomID.startsWith("waving") && !game.has("sawWaving")) {
+                game.set("sawWaving");
+                game.emit("Captain Mike: \"That little white figure on the point is the Waving Girl — Florence Martus, who for forty-four years greeted every ship entering the port, waving a handkerchief by day and a lantern by night. These marshes carried Savannah's cotton and naval stores out to the world.\"");
             }
         },
         hintStage(game) {
@@ -1031,6 +1038,17 @@ function riverboatScenario() {
             // leg's other decks are yours to explore with UP/DOWN.
             const room = game.roomID;
             const onTopDeck = room.endsWith("D4");
+            if (room.startsWith("city") || room.startsWith("waving")) {
+                return onTopDeck
+                    ? { key: "east4", clues: [
+                        "Captain Mike is telling the city's story — no rush.",
+                        "Continue EAST; Old Fort Jackson is downriver.",
+                    ] }
+                    : { key: "eastUp", clues: [
+                        "You can roam all four decks here with UP and DOWN.",
+                        "To carry on, climb UP to the open-air deck and keep heading EAST to Old Fort Jackson.",
+                    ] };
+            }
             if (room.startsWith("bridge")) {
                 return onTopDeck
                     ? { key: "bridge4", clues: [
@@ -1278,13 +1296,42 @@ function buildRiverboatWorld() {
         description: "The sightseeing lounge; through the glass the Talmadge's pale cables fan out far above. Stairs lead UP and DOWN.",
         exits: { up: "bridgeD4", down: "bridgeD2" }, items: ["bridge"] });
     addRoom({ id: "bridgeD4", title: "Fourth Deck — Open-Air Deck",
-        description: "The open-air deck beneath the Talmadge Memorial Bridge, its pale cables soaring overhead. Captain Mike brings the boat about here for the run downriver — go EAST to Old Fort Jackson; stairs lead DOWN.",
-        exits: { east: "fortJackson", down: "bridgeD3" }, items: ["captain", "bridge"] });
+        description: "The open-air deck beneath the Talmadge Memorial Bridge, its pale cables soaring overhead. Captain Mike brings the boat about here for the slow run downriver — head EAST and he'll walk you through Savannah's history all the way to Old Fort Jackson; stairs lead DOWN.",
+        exits: { east: "cityD4", down: "bridgeD3" }, items: ["captain", "bridge"] });
+
+    // Eastbound history legs — the slow downriver run, narrated by Captain Mike.
+    // Leg 4 — the historic downtown riverfront.
+    addRoom({ id: "cityD1", title: "First Deck — Dining Room",
+        description: "The first-deck dining room; out the windows the historic riverfront slides slowly by — cobblestone River Street and the tall façades of the old cotton warehouses. A stairway leads UP.",
+        exits: { up: "cityD2" } });
+    addRoom({ id: "cityD2", title: "Second Deck — Dining Room",
+        description: "The second-deck dining room; above the rooftops rises the gold dome of City Hall. Stairs lead UP and DOWN.",
+        exits: { up: "cityD3", down: "cityD1" } });
+    addRoom({ id: "cityD3", title: "Third Deck — Sightseeing Lounge",
+        description: "The sightseeing lounge; through the glass, the restored Cotton Exchange and the ballast-stone ramps of the old wharves. Stairs lead UP and DOWN.",
+        exits: { up: "cityD4", down: "cityD2" } });
+    addRoom({ id: "cityD4", title: "Fourth Deck — Open-Air Deck",
+        description: "The open-air deck off historic downtown Savannah, the old city drifting slowly past. Continue EAST toward Old Fort Jackson; stairs lead DOWN.",
+        exits: { east: "wavingD4", down: "cityD3" }, items: ["captain"] });
+
+    // Leg 5 — the eastern riverfront and the Waving Girl.
+    addRoom({ id: "wavingD1", title: "First Deck — Dining Room",
+        description: "The first-deck dining room; the banks open to marsh grass and the long view downriver. A stairway leads UP.",
+        exits: { up: "wavingD2" } });
+    addRoom({ id: "wavingD2", title: "Second Deck — Dining Room",
+        description: "The second-deck dining room; passengers wave at a passing freighter, keeping up an old Savannah tradition. Stairs lead UP and DOWN.",
+        exits: { up: "wavingD3", down: "wavingD1" } });
+    addRoom({ id: "wavingD3", title: "Third Deck — Sightseeing Lounge",
+        description: "The sightseeing lounge; the little white statue of the Waving Girl slips by on the point. Stairs lead UP and DOWN.",
+        exits: { up: "wavingD4", down: "wavingD2" } });
+    addRoom({ id: "wavingD4", title: "Fourth Deck — Open-Air Deck",
+        description: "The open-air deck along the eastern riverfront, Old Fort Jackson now not far downriver. Continue EAST; stairs lead DOWN.",
+        exits: { east: "fortJackson", down: "wavingD3" }, items: ["captain"] });
 
     // Arrival — reaching the fort wins.
     addRoom({ id: "fortJackson", title: "Old Fort Jackson",
         description: "The boat rounds a marshy bend to Old Fort Jackson, its brick ramparts standing guard where the river narrows.",
-        exits: {}, items: ["fort", "cannon"] });
+        exits: { west: "wavingD4" }, items: ["fort", "cannon"] });
 
     return { rooms, items };
 }
