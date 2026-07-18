@@ -262,7 +262,7 @@ struct GameView: View {
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
         }
-        .containerRelativeFrame(.vertical) { length, _ in length * 0.38 }
+        .containerRelativeFrame(.vertical) { length, _ in length * 0.60 }
         .overlay(alignment: .bottomTrailing) { catSprite }
         .overlay(alignment: .top) { locationFlash }
         // Animate whenever the room OR its lit state changes, so lighting the
