@@ -1132,7 +1132,7 @@ function fortPulaskiScenario() {
         build: buildFortPulaskiWorld,
         onTalk(game, id) {
             if (id !== "ranger") return false;
-            game.emit("The ranger leans on the desk. \"Fort Pulaski is named for Casimir Pulaski — a Polish nobleman and cavalry commander, the 'father of the American cavalry,' who fell leading a charge at the Siege of Savannah in 1779. The fort took eighteen years to build, and a young Lieutenant Robert E. Lee helped lay out its dikes. Everyone believed these seven-and-a-half-foot brick walls were invincible — until April 1862, when Union rifled cannon on Tybee Island breached them in about thirty hours and made every masonry fort in the world obsolete overnight. Take the walking path out to Battery Hambright and the North Pier, and don't miss the Lighthouse Overlook Trail.\"");
+            game.emit("Ranger Max leans on the desk. \"Fort Pulaski is named for Casimir Pulaski — a Polish nobleman and cavalry commander, the 'father of the American cavalry,' who fell leading a charge at the Siege of Savannah in 1779. The fort took eighteen years to build, and a young Lieutenant Robert E. Lee helped lay out its dikes. Everyone believed these seven-and-a-half-foot brick walls were invincible — until April 1862, when Union rifled cannon on Tybee Island breached them in about thirty hours and made every masonry fort in the world obsolete overnight. Take the walking path out to Battery Hambright and the North Pier, and don't miss the Lighthouse Overlook Trail.\"");
             return true;
         },
         onEnterRoom(game, roomID) {
@@ -1148,7 +1148,7 @@ function fortPulaskiScenario() {
             };
             switch (roomID) {
                 case "visitorCenter":
-                    award("checkedIn", 5, "A park ranger at the desk welcomes you to Fort Pulaski National Monument and checks you in. \"Cockspur Island has guarded the mouth of the Savannah River for a very long time — TALK TO the RANGER or READ the EXHIBIT to hear the story.\"");
+                    award("checkedIn", 5, "Ranger Max welcomes you to Fort Pulaski National Monument from behind the desk and checks you in. \"Cockspur Island has guarded the mouth of the Savannah River for a very long time — TALK TO MAX or READ the EXHIBIT to hear the story.\"");
                     break;
                 case "batteryHambright":
                     award("sawBattery", 5, "You come to Battery Hambright, a squat concrete gun emplacement half-swallowed by the marsh grass, its gun wells empty and open to the sky. It's named for Lieutenant Horace G. Hambright, a young West Point officer who died out west in 1896 and was honored here in 1904. Poured about 1900 over a foundation of 30,000 bricks salvaged from the original fort village, it was built to guard the river mouth in the Spanish-American War era — yet it never received its guns and never fired a shot.");
@@ -1449,8 +1449,8 @@ function buildFortPulaskiWorld() {
         isFixture: true });
 
     // Visitor center.
-    addItem({ id: "ranger", name: "park ranger", nouns: ["ranger", "guide", "attendant"],
-        description: "A National Park Service ranger in a flat-brimmed hat, glad to share the fort's story.",
+    addItem({ id: "ranger", name: "Ranger Max", nouns: ["ranger", "max", "guide", "attendant"],
+        description: "Ranger Max, a National Park Service ranger in a flat-brimmed hat, glad to share the fort's story.",
         isFixture: true, isCreature: true });
     addItem({ id: "exhibit", name: "history exhibit", nouns: ["exhibit", "display", "history", "panel", "panels"],
         description: "A wall of exhibit panels tracing the fort from its brick-by-brick construction to the day its walls were breached.",
@@ -1497,7 +1497,7 @@ function buildFortPulaskiWorld() {
         description: "You drive in through the park gates and along the causeway across the marsh onto Cockspur Island. Ahead, the brick ramparts of Fort Pulaski rise behind their moat. The visitor center is just NORTH.",
         exits: { north: "visitorCenter" }, items: ["gates", "entrancesign"] });
     addRoom({ id: "visitorCenter", title: "Visitor Center",
-        description: "The Fort Pulaski visitor center: a cool room of exhibits and a bookstore, with a ranger waiting at the desk to check you in. The fort's drawbridge is just INSIDE. A walking path leads NORTH toward the river, past Battery Hambright to the North Pier; the Lighthouse Overlook trailhead is EAST; and your car is parked back SOUTH.",
+        description: "The Fort Pulaski visitor center: a cool room of exhibits and a bookstore, where Ranger Max waits at the desk to check you in. The fort's drawbridge is just INSIDE. A walking path leads NORTH toward the river, past Battery Hambright to the North Pier; the Lighthouse Overlook trailhead is EAST; and your car is parked back SOUTH.",
         exits: { south: "gate", inside: "fort", north: "batteryHambright", east: "trail1" }, items: ["ranger", "exhibit"] });
     addRoom({ id: "fort", title: "Fort Pulaski",
         description: "You cross the drawbridge into Fort Pulaski. The parade ground opens before you, casemates ringing the walls and a stone stair climbing to the terreplein — the upper level where the cannons stand watch over the river. (Exploring the fort inside and out, including the cannon-lined upstairs, is coming soon.) The visitor center is back OUTSIDE.",
