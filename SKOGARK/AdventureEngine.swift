@@ -1382,7 +1382,7 @@ extension Game {
                 }
                 switch roomID {
                 case "visitorCenter":
-                    award("checkedIn", 5, "Ranger Max welcomes you to Fort Pulaski National Monument from behind the desk and checks you in. \"Cockspur Island has guarded the mouth of the Savannah River for a very long time — TALK TO MAX or READ the EXHIBIT to hear the story. The fort is just INSIDE, the riverside path to Battery Hambright and the North Pier is NORTH, and the Lighthouse Overlook Trail heads EAST.\"")
+                    award("checkedIn", 5, "Ranger Max welcomes you to Fort Pulaski National Monument from behind the desk and checks you in. \"Cockspur Island has guarded the mouth of the Savannah River for a very long time — TALK TO MAX or READ the EXHIBIT to hear the story. The fort is just INSIDE, the riverside path to Battery Hambright and the North Pier is NORTH, and the Lighthouse Overlook Trail heads EAST. Take a PARK MAP from the desk — READ MAP any time for the lay of the land.\"")
                 case "fort":
                     award("sawFort", 5, "You step through the sally port onto the parade ground — a broad green field ringed by brick casemate arches, quiet now under the flag. Eighteen years and some twenty-five million bricks went into these walls, finished in 1847, and a young Robert E. Lee helped engineer the site. The gun galleries are NORTH, the prison casemates WEST, and a stone stair climbs UP to the cannons on the terreplein.")
                 case "terreplein":
@@ -1736,6 +1736,17 @@ private func buildFortPulaskiWorld() -> (rooms: [String: Room], items: [String: 
              isFixture: true))
 
     // Visitor center.
+    add(Item(id: "map", name: "park map", nouns: ["map", "brochure", "guide", "pamphlet"],
+             description: "A folding park map of Fort Pulaski National Monument, free from the stack on the desk.",
+             isTakeable: true,
+             readText: """
+             "FORT PULASKI — PARK MAP
+               • The fort: INSIDE across the drawbridge. On the parade ground, the gun casemates are NORTH, the prison casemates WEST, and stairs lead UP to the cannons on the terreplein.
+               • Moat walk: SOUTH from the drawbridge, then EAST to the shell-scarred southeast angle.
+               • Battery Hambright & the North Pier: NORTH along the riverside path.
+               • Lighthouse Overlook Trail: EAST of the visitor center — FORWARD four stops to the observation deck.
+             Benches throughout — SIT and stay awhile."
+             """))
     add(Item(id: "ranger", name: "Ranger Max", nouns: ["ranger", "max", "guide", "attendant"],
              description: "Ranger Max, a National Park Service ranger in a flat-brimmed hat, glad to share the fort's story.",
              isFixture: true, isCreature: true))
@@ -1828,7 +1839,7 @@ private func buildFortPulaskiWorld() -> (rooms: [String: Room], items: [String: 
     add(Room(id: "visitorCenter", title: "Visitor Center",
              description: "The Fort Pulaski visitor center: a cool room of exhibits and a bookstore, where Ranger Max waits at the desk to check you in. The fort's drawbridge is just INSIDE. A walking path leads NORTH toward the river, past Battery Hambright to the North Pier; the Lighthouse Overlook trailhead is EAST; and your car is parked back SOUTH.",
              exits: [.south: "gate", .inside: "drawbridge", .north: "batteryHambright", .east: "trail1"],
-             items: ["ranger", "exhibit"]))
+             items: ["ranger", "exhibit", "map"]))
 
     // The fort — cross the moat, explore inside and up top, and circle the
     // walls outside to see what the 1862 cannon fire left behind.
