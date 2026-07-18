@@ -241,6 +241,20 @@ class Game {
     }
 
     handleGo(words) {
+        // Place names win over direction words embedded in them, so
+        // "go to north pier" heads for the pier rather than reading "north".
+        const nonDirectional = words.filter((w) => !directionFrom(w));
+        if (nonDirectional.length) {
+            const room = this.rooms[this.currentRoomID];
+            if (room) {
+                for (const dir of DIRECTIONS) {
+                    const destinationID = room.exits[dir];
+                    if (!destinationID) continue;
+                    if (this.titleMatches(this.rooms[destinationID], nonDirectional)) { this.move(dir); return; }
+                }
+            }
+            if (this.walkToward(nonDirectional)) return;
+        }
         for (const w of words) {
             const dir = directionFrom(w);
             if (dir) { this.move(dir); return; }
@@ -250,18 +264,64 @@ class Game {
             const dir = this.scenario.portalDirection(this, id);
             if (dir) { this.move(dir); return; }
         }
-        const room = this.rooms[this.currentRoomID];
-        if (room) {
+        this.emit("Go where?");
+    }
+
+    // True when any of the player's words appears in the room's title.
+    titleMatches(room, words) {
+        if (!room) return false;
+        const titleWords = new Set(room.title.toLowerCase().split(/[^a-z]+/).filter(Boolean));
+        return words.some((w) => titleWords.has(w));
+    }
+
+    // Walks toward a previously visited room the player names from anywhere
+    // ("go to the visitor center" from deep in the fort), following the
+    // shortest chain of exits one step at a time — every step is a real move,
+    // so gates still gate and each room announces itself. Returns false when
+    // no visited room matches the words.
+    walkToward(words) {
+        const anyMatch = Object.values(this.rooms).some((r) =>
+            r.visited && r.id !== this.currentRoomID && this.titleMatches(r, words));
+        if (!anyMatch) return false;
+
+        // Breadth-first search over exits to the nearest matching visited room.
+        const queue = [this.currentRoomID];
+        const cameFrom = {};
+        const seen = new Set([this.currentRoomID]);
+        let target = null;
+        while (queue.length) {
+            const id = queue.shift();
+            const room = this.rooms[id];
+            if (id !== this.currentRoomID && room && room.visited && this.titleMatches(room, words)) {
+                target = id;
+                break;
+            }
+            if (!room) continue;
             for (const dir of DIRECTIONS) {
-                const destinationID = room.exits[dir];
-                if (!destinationID) continue;
-                const destination = this.rooms[destinationID];
-                if (!destination) continue;
-                const titleWords = new Set(destination.title.toLowerCase().split(/[^a-z]+/).filter(Boolean));
-                if (words.some((w) => titleWords.has(w))) { this.move(dir); return; }
+                const dest = room.exits[dir];
+                if (!dest || seen.has(dest)) continue;
+                seen.add(dest);
+                cameFrom[dest] = { room: id, dir };
+                queue.push(dest);
             }
         }
-        this.emit("Go where?");
+        if (!target) return false;
+
+        const path = [];
+        let cursor = target;
+        while (cursor !== this.currentRoomID && cameFrom[cursor]) {
+            path.push(cameFrom[cursor].dir);
+            cursor = cameFrom[cursor].room;
+        }
+        path.reverse();
+        if (!path.length || path.length > 10) return false;
+
+        for (const dir of path) {
+            const before = this.currentRoomID;
+            this.move(dir);
+            if (this.currentRoomID === before) break;   // a gate blocked the way
+        }
+        return true;
     }
 
     // MARK: Description & Visibility
@@ -698,6 +758,7 @@ class Game {
         const lines = [
             "Some things you can type:",
             "  Directions: NORTH/N, SOUTH/S, EAST/E, WEST/W, UP/U, DOWN/D, IN, OUT",
+            "  GO TO <place>         — walk back to somewhere you've visited",
             "  LOOK (L)              — describe your surroundings",
             "  LOOK AROUND           — list what you can see here, and the exits",
             "  EXAMINE <thing> (X)   — inspect something",
@@ -1491,7 +1552,7 @@ function buildFortPulaskiWorld() {
     addItem({ id: "map", name: "park map", nouns: ["map", "brochure", "guide", "pamphlet"],
         description: "A folding park map of Fort Pulaski National Monument, free from the stack on the desk.",
         isTakeable: true,
-        readText: "\"FORT PULASKI — PARK MAP\n  • The fort: INSIDE across the drawbridge. On the parade ground, the gun casemates are NORTH, the prison casemates WEST, and stairs lead UP to the cannons on the terreplein.\n  • Moat walk: SOUTH from the drawbridge, then EAST to the shell-scarred southeast angle.\n  • Battery Hambright & the North Pier: NORTH along the riverside path.\n  • Lighthouse Overlook Trail: EAST of the visitor center — FORWARD four stops to the observation deck.\nBenches throughout — SIT and stay awhile.\"" });
+        readText: "\"FORT PULASKI — PARK MAP\n  • The fort: INSIDE across the drawbridge. On the parade ground, the gun casemates are NORTH, the prison casemates WEST, and stairs lead UP to the cannons on the terreplein.\n  • Moat walk: SOUTH from the drawbridge, then EAST to the shell-scarred southeast angle.\n  • Battery Hambright & the North Pier: NORTH along the riverside path.\n  • Lighthouse Overlook Trail: EAST of the visitor center — FORWARD four stops to the observation deck.\nBenches throughout — SIT and stay awhile.\nLost? GO TO VISITOR CENTER walks you back from anywhere you've been.\"" });
     addItem({ id: "ranger", name: "Ranger Max", nouns: ["ranger", "max", "guide", "attendant"],
         description: "Ranger Max, a National Park Service ranger in a flat-brimmed hat, glad to share the fort's story.",
         isFixture: true, isCreature: true });

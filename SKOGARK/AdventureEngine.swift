@@ -346,6 +346,19 @@ final class Game {
     /// portal you pass through ("go through the window"), or the name of
     /// an adjacent room ("go to the kitchen").
     private func handleGo(_ words: [String]) {
+        // Place names win over direction words embedded in them, so
+        // "go to north pier" heads for the pier rather than reading "north".
+        let nonDirectional = words.filter { Direction.from($0) == nil }
+        if !nonDirectional.isEmpty {
+            if let room = rooms[currentRoomID] {
+                for (dir, destinationID) in room.exits
+                where titleMatches(rooms[destinationID], nonDirectional) {
+                    move(dir)
+                    return
+                }
+            }
+            if walkToward(nonDirectional) { return }
+        }
         if let dir = words.compactMap({ Direction.from($0) }).first {
             move(dir)
             return
@@ -354,19 +367,63 @@ final class Game {
             move(dir)
             return
         }
-        if let room = rooms[currentRoomID] {
-            for (dir, destinationID) in room.exits {
-                guard let destination = rooms[destinationID] else { continue }
-                let titleWords = Set(destination.title.lowercased()
-                    .split(whereSeparator: { !$0.isLetter })
-                    .map(String.init))
-                if words.contains(where: { titleWords.contains($0) }) {
-                    move(dir)
-                    return
-                }
+        emit("Go where?")
+    }
+
+    /// True when any of the player's words appears in the room's title.
+    private func titleMatches(_ room: Room?, _ words: [String]) -> Bool {
+        guard let room else { return false }
+        let titleWords = Set(room.title.lowercased()
+            .split(whereSeparator: { !$0.isLetter })
+            .map(String.init))
+        return words.contains { titleWords.contains($0) }
+    }
+
+    /// Walks toward a previously visited room the player names from anywhere
+    /// ("go to the visitor center" from deep in the fort), following the
+    /// shortest chain of exits one step at a time — every step is a real move,
+    /// so gates still gate and each room announces itself. Returns false when
+    /// no visited room matches the words.
+    private func walkToward(_ words: [String]) -> Bool {
+        guard rooms.values.contains(where: {
+            $0.visited && $0.id != currentRoomID && titleMatches($0, words)
+        }) else { return false }
+
+        // Breadth-first search over exits to the nearest matching visited room.
+        var queue: [String] = [currentRoomID]
+        var cameFrom: [String: (room: String, dir: Direction)] = [:]
+        var seen: Set<String> = [currentRoomID]
+        var target: String? = nil
+        while !queue.isEmpty {
+            let id = queue.removeFirst()
+            if id != currentRoomID, let room = rooms[id], room.visited, titleMatches(room, words) {
+                target = id
+                break
+            }
+            guard let room = rooms[id] else { continue }
+            for (dir, dest) in room.exits where !seen.contains(dest) {
+                seen.insert(dest)
+                cameFrom[dest] = (id, dir)
+                queue.append(dest)
             }
         }
-        emit("Go where?")
+        guard let target else { return false }
+
+        var path: [Direction] = []
+        var cursor = target
+        while cursor != currentRoomID, let step = cameFrom[cursor] {
+            path.append(step.dir)
+            cursor = step.room
+        }
+        path.reverse()
+        guard !path.isEmpty, path.count <= 10 else { return false }
+
+        for direction in path {
+            let before = currentRoomID
+            move(direction)
+            if currentRoomID == before { break }   // a gate blocked the way
+        }
+        return true
     }
 
     // MARK: Description & Visibility
@@ -894,6 +951,7 @@ final class Game {
         var lines = [
             "Some things you can type:",
             "  Directions: NORTH/N, SOUTH/S, EAST/E, WEST/W, UP/U, DOWN/D, IN, OUT",
+            "  GO TO <place>         — walk back to somewhere you've visited",
             "  LOOK (L)              — describe your surroundings",
             "  LOOK AROUND           — list what you can see here, and the exits",
             "  EXAMINE <thing> (X)   — inspect something",
@@ -1751,7 +1809,8 @@ private func buildFortPulaskiWorld() -> (rooms: [String: Room], items: [String: 
                • Moat walk: SOUTH from the drawbridge, then EAST to the shell-scarred southeast angle.
                • Battery Hambright & the North Pier: NORTH along the riverside path.
                • Lighthouse Overlook Trail: EAST of the visitor center — FORWARD four stops to the observation deck.
-             Benches throughout — SIT and stay awhile."
+             Benches throughout — SIT and stay awhile.
+             Lost? GO TO VISITOR CENTER walks you back from anywhere you've been."
              """))
     add(Item(id: "ranger", name: "Ranger Max", nouns: ["ranger", "max", "guide", "attendant"],
              description: "Ranger Max, a National Park Service ranger in a flat-brimmed hat, glad to share the fort's story.",
