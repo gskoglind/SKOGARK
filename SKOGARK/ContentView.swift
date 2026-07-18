@@ -265,6 +265,12 @@ struct GameView: View {
         .containerRelativeFrame(.vertical) { length, _ in length * 0.60 }
         .overlay(alignment: .bottomTrailing) { catSprite }
         .overlay(alignment: .top) { locationFlash }
+        // The pane is purely decorative, and the scaledToFill artwork overflows
+        // its frame — .clipped() trims the drawing but NOT hit testing, so
+        // without this the invisible overflow swallows taps on the title bar
+        // (the Menu/Hint/Voice buttons). Mirrors the web pane's
+        // pointer-events: none.
+        .allowsHitTesting(false)
         // Animate whenever the room OR its lit state changes, so lighting the
         // lantern in the cellar cross-fades from dark to the egg-lit view.
         .animation(.easeInOut(duration: 0.4), value: sceneKey)
