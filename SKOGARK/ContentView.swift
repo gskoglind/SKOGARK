@@ -502,11 +502,16 @@ struct GameView: View {
 final class Narrator {
     private let synthesizer = AVSpeechSynthesizer()
 
-    /// Captain Mike's voice: a male American voice, chosen once. Stays American
-    /// throughout — falls back to any en-US voice, then the default en-US voice,
-    /// so the narrator never picks up a non-American accent.
+    /// Captain Mike's voice: the most natural-sounding male American voice
+    /// installed, chosen once. Voices are ranked premium > enhanced > default
+    /// quality (downloadable in Settings > Accessibility > Spoken Content), a
+    /// male voice preferred at the best available quality. Stays American
+    /// throughout — falls back to any en-US voice, then the default en-US
+    /// voice, so the narrator never picks up a non-American accent.
     private static let voice: AVSpeechSynthesisVoice? = {
-        let american = AVSpeechSynthesisVoice.speechVoices().filter { $0.language == "en-US" }
+        let american = AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language == "en-US" }
+            .sorted { $0.quality.rawValue > $1.quality.rawValue }
         return american.first(where: { $0.gender == .male })
             ?? american.first
             ?? AVSpeechSynthesisVoice(language: "en-US")

@@ -158,21 +158,43 @@
                     + (v.localService ? " local" : " REMOTE")
                     + (v.default ? " default" : "")));
         }
-        const enUS = voices.filter((v) => /en[-_]US/i.test(v.lang));
-        const isMale = (v) =>
-            /\b(male|alex|fred|david|aaron|reed|rocko|eddy|tom|guy|junior|ralph)\b/i.test(v.name);
-        // Prefer a LOCAL en-US voice: remote voices like "Google US English"
-        // are network-backed and Chrome often fails to load them, silently
-        // falling back to another (here, British) default. A local voice is
-        // reliable and unmistakably American. Order of preference:
-        //   local male → local any → remote male → remote any.
-        // Only ever assign an en-US voice; never a non-US object, since an
-        // explicit utterance.voice overrides utterance.lang and would defeat
-        // the "en-US" language request. When none exists, leave narrator null
-        // and let the "en-US" lang on the utterance drive pronunciation.
-        const enUSLocal = enUS.filter((v) => v.localService);
-        narrator = enUSLocal.find(isMale) || enUSLocal[0]
-            || enUS.find(isMale) || enUS[0] || null;
+        // Rank en-US voices by how natural they sound, so the narrator is the
+        // best voice the browser has rather than whatever's first:
+        //   1. Edge's "Natural" neural voices (excellent),
+        //   2. Apple "(Enhanced)"/"(Premium)" voices the user has downloaded,
+        //   3. Siri voices,
+        //   4. Chrome's remote "Google US English" (network-backed but good;
+        //      long lines are chunked in speak() to dodge its cutoff bug),
+        //   5. the better built-in compacts (Samantha, Alex, Aaron, …).
+        // Apple's legacy novelty voices (Fred, Ralph, Zarvox, …) sound like a
+        // 1980s robot and are never picked. A male-sounding name is a small
+        // tiebreak within a tier — Captain Mike — never a tier jump. Only an
+        // en-US voice is ever assigned (an explicit utterance.voice overrides
+        // utterance.lang); with none installed, narrator stays null and the
+        // utterance's lang="en-US" drives pronunciation alone.
+        const NOVELTY = /albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|fred|good news|hysterical|jester|junior|kathy|organ|ralph|superstar|trinoids|whisper|wobble|zarvox|\beddy\b|\bflo\b|grandma|grandpa|\breed\b|rocko|sandy|shelley/;
+        const MALE = /\b(male|guy|andrew|christopher|eric|roger|steffan|davis|tony|jason|aaron|alex|evan|tom|nathan|david)\b/;
+        function voiceScore(v) {
+            if (!/en[-_]US/i.test(v.lang)) return 0;
+            const name = v.name.toLowerCase();
+            if (NOVELTY.test(name)) return 0;
+            let score = 10;
+            if (name.includes("natural")) score += 1000;
+            else if (name.includes("enhanced") || name.includes("premium")) score += 900;
+            else if (name.includes("siri")) score += 800;
+            else if (name.includes("google us english")) score += 700;
+            else if (/samantha|alex|aaron|nicky|evan|tom|allison|ava|susan|joelle/.test(name)) score += 100;
+            if (MALE.test(name)) score += 30;
+            if (v.localService) score += 5; // reliability tiebreak
+            return score;
+        }
+        let best = null;
+        let bestScore = 0;
+        for (const v of voices) {
+            const score = voiceScore(v);
+            if (score > bestScore) { best = v; bestScore = score; }
+        }
+        narrator = best;
         if (narrator) {
             console.info("SKOGARK narrator voice:", narrator.name, "(" + narrator.lang + ")",
                 narrator.localService ? "local" : "REMOTE");
@@ -217,6 +239,26 @@
             .trim();
     }
 
+    // Splits prose into sentence-boundary chunks of roughly ≤220 characters.
+    // Chrome silently cuts speech off after ~15 seconds on one utterance
+    // (worst with its remote Google voices); several short utterances queued
+    // back-to-back sound identical and never hit the limit.
+    function speechChunks(text) {
+        const sentences = text.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) || [text];
+        const parts = [];
+        let buffer = "";
+        for (const sentence of sentences) {
+            if (buffer && buffer.length + sentence.length > 220) {
+                parts.push(buffer);
+                buffer = sentence;
+            } else {
+                buffer += sentence;
+            }
+        }
+        if (buffer.trim()) parts.push(buffer);
+        return parts;
+    }
+
     function speak(text) {
         if (!voiceOn || !synth) return;
         // If the voice list hasn't loaded yet, speaking now lets Chrome use its
@@ -225,12 +267,14 @@
         if (!voicesReady) { pendingText = text; return; }
         const say = speakable(text);
         if (!say) return;
-        const utterance = new SpeechSynthesisUtterance(say);
-        if (narrator) utterance.voice = narrator;
-        utterance.lang = "en-US"; // force US English pronunciation
-        utterance.rate = 1.0;
-        utterance.pitch = 0.95; // a touch lower for Captain Mike
-        synth.speak(utterance);
+        for (const chunk of speechChunks(say)) {
+            const utterance = new SpeechSynthesisUtterance(chunk);
+            if (narrator) utterance.voice = narrator;
+            utterance.lang = "en-US"; // force US English pronunciation
+            utterance.rate = 1.0;
+            utterance.pitch = 0.95; // a touch lower for Captain Mike
+            synth.speak(utterance);
+        }
     }
 
     function stopSpeaking() { if (synth) synth.cancel(); }
