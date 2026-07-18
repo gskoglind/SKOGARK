@@ -119,10 +119,14 @@
     }
 
     // Resolves a room to its orientation-appropriate background URL (or null).
+    // The variant is chosen by the scene pane's own shape (usually wider than
+    // tall, so landscape art is the norm), matching the iOS scene pane.
     function backgroundURL(roomID) {
         const base = backgroundBase(roomID);
         if (!base) return null;
-        const orientation = portraitQuery.matches ? "portrait" : "landscape";
+        const scene = document.getElementById("scene");
+        const paneIsWide = !scene || scene.clientWidth >= scene.clientHeight;
+        const orientation = paneIsWide ? "landscape" : "portrait";
         return `images/${base}_${orientation}.png`;
     }
 

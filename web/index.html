@@ -6,19 +6,11 @@
     <meta name="color-scheme" content="dark">
     <meta name="description" content="SKOGARK — a tiny text adventure.">
     <title>SKOGARK — A Tiny Text Adventure</title>
-    <link rel="stylesheet" href="style.css?v=14">
+    <link rel="stylesheet" href="style.css?v=15">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 </head>
 <body>
-    <!-- Full-bleed location artwork behind the terminal. Two layers cross-fade
-         on room change; the scrim keeps the monospaced text legible. -->
-    <div id="scene" aria-hidden="true">
-        <div class="scene-layer" id="sceneA"></div>
-        <div class="scene-layer" id="sceneB"></div>
-        <div id="sceneScrim"></div>
-    </div>
-
     <main id="app">
         <section id="menu">
             <h1>SKOGARK</h1>
@@ -39,6 +31,18 @@
                 <button id="camsButton" type="button" hidden
                         title="Live webcams along the river">&#128247; Cams</button>
             </div>
+
+            <!-- Location artwork in a fixed pane above the transcript, so the
+                 commentary scrolls below the image rather than over it. Two
+                 layers cross-fade on room change; the arrival card and the
+                 fishmonger's stray cat sit on top of the art. -->
+            <div id="scene" aria-hidden="true">
+                <div class="scene-layer" id="sceneA"></div>
+                <div class="scene-layer" id="sceneB"></div>
+                <div id="catSprite"></div>
+                <div id="locationFlash"></div>
+            </div>
+
             <div id="transcript" role="log" aria-live="polite" aria-label="Game transcript"></div>
             <form id="inputBar" autocomplete="off">
                 <span class="prompt" aria-hidden="true">&gt;</span>
@@ -48,10 +52,6 @@
                        spellcheck="false" enterkeyhint="send" aria-label="Enter a command">
                 <button type="submit">Go</button>
             </form>
-
-            <!-- Arrival location card (top) and the fishmonger's stray cat. -->
-            <div id="locationFlash" aria-hidden="true"></div>
-            <div id="catSprite" aria-hidden="true"></div>
 
             <!-- Live-ships map overlay (only used when a proxy URL is configured). -->
             <div id="shipsOverlay" hidden>
@@ -89,6 +89,6 @@
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="engine.js?v=14"></script>
     <script src="cat-sprite.js?v=14"></script>
-    <script src="app.js?v=14"></script>
+    <script src="app.js?v=15"></script>
 </body>
 </html>

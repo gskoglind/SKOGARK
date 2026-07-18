@@ -124,13 +124,13 @@ struct GameView: View {
         VStack(spacing: 0) {
             titleBar
             Divider()
+            scenePane
+            Divider()
             transcriptView
             Divider()
             inputBar
         }
-        .background(backgroundView)
-        .overlay(alignment: .bottomTrailing) { catSprite }
-        .overlay(alignment: .top) { locationFlash }
+        .background(Color.black)
         .onAppear { flashLocation(game.roomTitle); speakPending() }
         .onChange(of: game.roomID) { flashLocation(game.roomTitle); announceShipIfNeeded() }
         .onChange(of: game.transcript.count) { speakPending() }
@@ -236,13 +236,14 @@ struct GameView: View {
         }
     }
 
-    /// Full-bleed location artwork behind the terminal, with a dark gradient
-    /// scrim so the monospaced text stays legible. Rooms without art fall back
-    /// to plain black, and moving between rooms cross-fades the image.
-    private var backgroundView: some View {
+    /// Location artwork in a fixed pane above the transcript, so the commentary
+    /// scrolls below the image rather than over it. The device's full-screen
+    /// orientation picks the art variant; rooms without art show plain black,
+    /// and moving between rooms cross-fades the image.
+    private var scenePane: some View {
         GeometryReader { geo in
-            // Compare width vs height rather than size class: on iPad both
-            // orientations are .regular, so size class can't tell them apart.
+            // Pick the art variant that best fills the pane's own shape (the
+            // pane is usually wider than tall, so landscape art is the norm).
             let orientation = geo.size.width > geo.size.height ? "landscape" : "portrait"
             let assetName = backgroundImageBaseName(for: game.roomID)
                 .map { "\($0)_\(orientation)" }
@@ -256,16 +257,14 @@ struct GameView: View {
                         .clipped()
                         .transition(.opacity)
                         .id(assetName)
-                    LinearGradient(
-                        colors: [.black.opacity(0.35), .black.opacity(0.75)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
         }
-        .ignoresSafeArea()
+        .containerRelativeFrame(.vertical) { length, _ in length * 0.38 }
+        .overlay(alignment: .bottomTrailing) { catSprite }
+        .overlay(alignment: .top) { locationFlash }
         // Animate whenever the room OR its lit state changes, so lighting the
         // lantern in the cellar cross-fades from dark to the egg-lit view.
         .animation(.easeInOut(duration: 0.4), value: sceneKey)
@@ -279,19 +278,18 @@ struct GameView: View {
     }
 
     /// The stray cat that loiters at the fishmonger's stall, hoping for a
-    /// scrap. It lives on the content layer (not the full-bleed background) so it
-    /// stays above the software keyboard — in iPad landscape especially — and
-    /// sits just above the input row. Supply the transparent-background "cat"
-    /// image (a cat.imageset) to light it up.
+    /// scrap. It sits in the bottom-right of the scene pane, on top of the
+    /// artwork. Supply the transparent-background "cat" image (a cat.imageset)
+    /// to light it up.
     private var catSprite: some View {
         Group {
             if game.roomID == "townFish", let cat = UIImage(named: "cat") {
                 Image(uiImage: cat)
                     .resizable()
                     .scaledToFit()
-                    .frame(height: 170)
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 72)
+                    .frame(height: 140)
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 8)
                     .transition(.opacity)
             }
         }
@@ -754,4 +752,9 @@ struct ShipMapView: View {
 
 #Preview {
     ContentView()
+}
+
+#Preview("Game — Fort Pulaski") {
+    GameView(game: Game(scenario: Game.fortPulaskiScenario()), onExitToMenu: {})
+        .preferredColorScheme(.dark)
 }
