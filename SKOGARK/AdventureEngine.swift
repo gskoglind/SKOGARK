@@ -407,6 +407,12 @@ final class Game {
             }
             lines.append("There is a \(item.name) here.")
         }
+        // Always list the ways out — especially on revisits, when the full
+        // description (and its woven-in directions) doesn't reprint.
+        let exits = obviousExits()
+        if !exits.isEmpty {
+            lines.append("Obvious exits: \(exits.map { $0.rawValue }.joined(separator: ", ")).")
+        }
         emit(lines.joined(separator: "\n"))
     }
 

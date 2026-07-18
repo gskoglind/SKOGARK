@@ -301,6 +301,10 @@ class Game {
             }
             lines.push(`There is a ${item.name} here.`);
         }
+        // Always list the ways out — especially on revisits, when the full
+        // description (and its woven-in directions) doesn't reprint.
+        const exits = this.obviousExits();
+        if (exits.length) lines.push(`Obvious exits: ${exits.join(", ")}.`);
         this.emit(lines.join("\n"));
     }
 
