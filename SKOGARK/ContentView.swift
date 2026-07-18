@@ -363,6 +363,19 @@ struct GameView: View {
         case "wavingD3":    return "bg_cruise_waving_d3"
         case "wavingD4":    return "bg_cruise_waving_d4"
         case "fortJackson": return "bg_fort_jackson"
+        // Fort Pulaski National Monument — drive in through the gates, check in
+        // at the visitor center, walk out past Battery Hambright to the North
+        // Pier, and follow the Lighthouse Overlook Trail to the Cockspur Island
+        // Lighthouse. (The fort interior is a placeholder for now.)
+        case "gate":             return "bg_pulaski_gate"
+        case "visitorCenter":    return "bg_pulaski_visitor_center"
+        case "fort":             return "bg_pulaski_fort"
+        case "batteryHambright": return "bg_pulaski_battery_hambright"
+        case "northPier":        return "bg_pulaski_north_pier"
+        case "trail1":           return "bg_pulaski_trail_1"
+        case "trail2":           return "bg_pulaski_trail_2"
+        case "trail3":           return "bg_pulaski_trail_3"
+        case "trail4":           return "bg_pulaski_lighthouse_deck"
         default:            return nil
         }
     }

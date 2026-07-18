@@ -19,6 +19,9 @@ enum Direction: String, CaseIterable, Codable {
         case "d", "down": return .down
         case "in", "inside", "enter": return .inside
         case "out", "outside", "exit", "leave": return .outside
+        // "forward"/"back" read as north/south, for walking a linear trail.
+        case "forward", "ahead", "fwd": return .north
+        case "back", "backward", "backwards": return .south
         default: return Direction(rawValue: word)
         }
     }
@@ -167,7 +170,7 @@ final class Game {
     private var hintStageKey = ""
 
     /// All playable scenarios, for the selection menu.
-    static let scenarios: [Scenario] = [houseScenario(), townScenario(), riverboatScenario()]
+    static let scenarios: [Scenario] = [houseScenario(), townScenario(), riverboatScenario(), fortPulaskiScenario()]
 
     convenience init() { self.init(scenario: Game.houseScenario()) }
 
@@ -1319,6 +1322,80 @@ extension Game {
         )
     }
 
+    /// Fort Pulaski: a self-guided visit to the National Monument on Cockspur
+    /// Island. Drive in through the gates, check in at the visitor center, then
+    /// walk out past Battery Hambright to the historic North Pier, and follow
+    /// the Lighthouse Overlook Trail through the marsh to the Cockspur Island
+    /// Lighthouse. (The fort itself — inside and out, with its cannon-lined
+    /// upstairs — is left as a placeholder for a future update.)
+    static func fortPulaskiScenario() -> Scenario {
+        // The four points of interest the visitor is here to see.
+        let stops = ["checkedIn", "sawBattery", "sawPier", "sawLighthouse"]
+        return Scenario(
+            id: "fortPulaski",
+            title: "Explore Fort Pulaski",
+            blurb: "Drive onto Cockspur Island to visit Fort Pulaski National Monument: check in at the visitor center, walk out past Battery Hambright to the historic North Pier, and follow the Lighthouse Overlook Trail through the marsh to spy the Cockspur Island Lighthouse.",
+            banner: """
+            FORT PULASKI
+            A visit to the National Monument on Cockspur Island. (c) 2026
+            Type HELP for commands. Drive NORTH to the visitor center to check in.
+            ─────────────────────────────
+            """,
+            startRoomID: "gate",
+            maxScore: 25,
+            startingCoins: 0,
+            build: buildFortPulaskiWorld,
+            onTalk: { game, id in
+                guard id == "ranger" else { return false }
+                game.emit("The ranger leans on the desk. \"Fort Pulaski is named for Casimir Pulaski — a Polish nobleman and cavalry commander, the 'father of the American cavalry,' who fell leading a charge at the Siege of Savannah in 1779. The fort took eighteen years to build, and a young Lieutenant Robert E. Lee helped lay out its dikes. Everyone believed these seven-and-a-half-foot brick walls were invincible — until April 1862, when Union rifled cannon on Tybee Island breached them in about thirty hours and made every masonry fort in the world obsolete overnight. Take the walking path out to Battery Hambright and the North Pier, and don't miss the Lighthouse Overlook Trail.\"")
+                return true
+            },
+            onEnterRoom: { game, roomID in
+                // Reaching each of the four points of interest is announced and
+                // scored once; seeing all four ends the visit.
+                func award(_ flag: String, _ points: Int, _ note: String) {
+                    guard !game.has(flag: flag) else { return }
+                    game.set(flag: flag)
+                    game.award(points, note)
+                    if stops.allSatisfy({ game.has(flag: $0) }) {
+                        game.win("You've driven in through the gates, checked in at the visitor center, walked out to Battery Hambright and the North Pier, and followed the marsh trail to the Cockspur Island Lighthouse. The old fort itself — its drawbridge, casemates, and the cannon-lined terreplein upstairs — waits for another day. (More of Fort Pulaski is coming soon.)")
+                    }
+                }
+                switch roomID {
+                case "visitorCenter":
+                    award("checkedIn", 5, "A park ranger at the desk welcomes you to Fort Pulaski National Monument and checks you in. \"Cockspur Island has guarded the mouth of the Savannah River for a very long time — TALK TO the RANGER or READ the EXHIBIT to hear the story.\"")
+                case "batteryHambright":
+                    award("sawBattery", 5, "You come to Battery Hambright, a squat concrete gun emplacement half-swallowed by the marsh grass, its gun wells empty and open to the sky. It's named for Lieutenant Horace G. Hambright, a young West Point officer who died out west in 1896 and was honored here in 1904. Poured about 1900 over a foundation of 30,000 bricks salvaged from the original fort village, it was built to guard the river mouth in the Spanish-American War era — yet it never received its guns and never fired a shot.")
+                case "northPier":
+                    award("sawPier", 5, "Out at the end of the Historic North Pier, you settle in to watch the traffic where the Savannah River meets the sea: a towering container ship slides seaward stacked with steel boxes, a Coast Guard boat throttles past on patrol, and a fast river pilot boat darts out to put a harbor pilot aboard an inbound freighter.")
+                case "trail4":
+                    award("sawLighthouse", 10, "The trail ends at a small observation deck. You lean into the mounted binoculars and there it is across the marsh: the Cockspur Island Lighthouse — the smallest lighthouse in Georgia — standing on its oyster-shell bar, its base shaped like a ship's prow to cut the waves. It survived the 1862 bombardment of Fort Pulaski with over five thousand shots screaming directly overhead, and stands quiet now, relit for history.")
+                default:
+                    break
+                }
+            },
+            hintStage: { game in
+                if !game.has(flag: "checkedIn") {
+                    return (key: "checkin", clues: [
+                        "Start by driving up to the visitor center to check in.",
+                        "Go NORTH from the gates to the visitor center.",
+                    ])
+                }
+                var todo: [String] = []
+                if !game.has(flag: "sawBattery") { todo.append("Battery Hambright") }
+                if !game.has(flag: "sawPier") { todo.append("the North Pier") }
+                if !game.has(flag: "sawLighthouse") { todo.append("the Lighthouse Overlook") }
+                if todo.isEmpty {
+                    return (key: "done", clues: ["You've seen every stop — enjoy the view!"])
+                }
+                return (key: "todo:" + todo.joined(separator: "|"), clues: [
+                    "Still to explore: \(todo.joined(separator: ", ")).",
+                    "From the visitor center, NORTH walks you past Battery Hambright to the North Pier; EAST starts the Lighthouse Overlook Trail — go FORWARD four stops to the deck and its binoculars, then head BACK.",
+                ])
+            }
+        )
+    }
+
     // Small mutators the scenario hooks lean on.
     fileprivate func revealItem(_ id: String, inRoom roomID: String) {
         rooms[roomID]?.items.append(id)
@@ -1610,6 +1687,106 @@ private func buildRiverboatWorld() -> (rooms: [String: Room], items: [String: It
              description: "The boat rounds a marshy bend to Old Fort Jackson, its brick ramparts standing guard where the river narrows.",
              exits: [.west: "wavingD4"],
              items: ["fort", "cannon"]))
+
+    return (rooms, items)
+}
+
+private func buildFortPulaskiWorld() -> (rooms: [String: Room], items: [String: Item]) {
+    var items: [String: Item] = [:]
+    func add(_ item: Item) { items[item.id] = item }
+
+    // Entrance.
+    add(Item(id: "gates", name: "park gates", nouns: ["gate", "gates"],
+             description: "The park entrance gates, open onto the causeway that runs across the marsh to Cockspur Island.", isFixture: true))
+    add(Item(id: "entrancesign", name: "entrance sign", nouns: ["sign", "entrance"],
+             description: "A brown National Park Service sign: FORT PULASKI NATIONAL MONUMENT.",
+             readText: "\"FORT PULASKI NATIONAL MONUMENT — Cockspur Island, Georgia. Established 1924. Drive ahead to the visitor center to begin your visit.\"",
+             isFixture: true))
+
+    // Visitor center.
+    add(Item(id: "ranger", name: "park ranger", nouns: ["ranger", "guide", "attendant"],
+             description: "A National Park Service ranger in a flat-brimmed hat, glad to share the fort's story.",
+             isFixture: true, isCreature: true))
+    add(Item(id: "exhibit", name: "history exhibit", nouns: ["exhibit", "display", "history", "panel", "panels"],
+             description: "A wall of exhibit panels tracing the fort from its brick-by-brick construction to the day its walls were breached.",
+             readText: "\"THE STORY OF FORT PULASKI\nNamed for Casimir Pulaski, the Polish-born 'father of the American cavalry,' who fell at the 1779 Siege of Savannah. Begun in 1829 and eighteen years in the building — a young Robert E. Lee helped survey its dikes. Its walls were thought impregnable until April 11–12, 1862, when Union rifled cannon on Tybee Island breached them in about thirty hours, ending the age of masonry forts.\"",
+             isFixture: true))
+
+    // Battery Hambright.
+    add(Item(id: "battery", name: "Battery Hambright", nouns: ["battery", "hambright", "emplacement", "concrete"],
+             description: "A squat, poured-concrete gun battery from around 1900, its gun wells empty and open to the sky. It is named for Lieutenant Horace G. Hambright, a West Point officer who died young in 1896; the battery never received its guns and never fired a shot.",
+             isFixture: true))
+    add(Item(id: "marker", name: "historical marker", nouns: ["marker", "plaque", "tablet"],
+             description: "A cast historical marker beside the battery.",
+             readText: "\"BATTERY HORACE HAMBRIGHT — Built 1899–1900 to guard the mouth of the Savannah River, and named in 1904 for Lt. Horace G. Hambright, U.S.A. Poured over 30,000 bricks salvaged from the original fort construction village. Designed for two rapid-fire 3-inch guns on disappearing mounts; the guns were never installed.\"",
+             isFixture: true))
+
+    // North Pier and the river traffic.
+    add(Item(id: "pier", name: "North Pier", nouns: ["pier", "dock", "wharf"],
+             description: "The historic North Pier, reaching out into the channel where the Savannah River opens to the Atlantic.", isFixture: true))
+    add(Item(id: "containership", name: "container ship", nouns: ["container", "ship", "freighter", "cargo"],
+             description: "A colossal container ship riding the channel, stacked with steel boxes bound to or from the busy Port of Savannah.", isFixture: true))
+    add(Item(id: "coastguard", name: "Coast Guard boat", nouns: ["coast", "guard", "cutter", "patrol"],
+             description: "A bright, orange-striped Coast Guard boat throttling past on patrol.", isFixture: true))
+    add(Item(id: "pilotboat", name: "river pilot boat", nouns: ["pilot", "pilotboat"],
+             description: "A fast river pilot boat, out to put a harbor pilot aboard an inbound freighter for the run up to Savannah.", isFixture: true))
+
+    // Lighthouse Overlook Trail.
+    add(Item(id: "crabs", name: "fiddler crabs", nouns: ["crab", "crabs", "fiddler", "fiddlers"],
+             description: "Mud fiddler crabs — the males waving one oversized claw — scattering sideways into their burrows as you pass.", isFixture: true))
+    add(Item(id: "binoculars", name: "binoculars", nouns: ["binoculars", "scope"],
+             description: "A pair of mounted binoculars fixed on the channel, trained across the marsh toward the lighthouse.", isFixture: true))
+    add(Item(id: "lighthouse", name: "Cockspur Island Lighthouse", nouns: ["lighthouse", "cockspur", "light", "beacon"],
+             description: "The Cockspur Island Lighthouse — the smallest in Georgia — on its oyster-shell bar, its base shaped like a ship's prow to cut the waves. It stood through the 1862 bombardment with thousands of shots passing overhead; it's closed to the public but plain to see from here.", isFixture: true))
+    add(Item(id: "deck", name: "observation deck", nouns: ["deck", "overlook", "platform"],
+             description: "A small wooden observation deck at the marsh's edge.", isFixture: true))
+
+    // The fort itself (placeholder for a future update).
+    add(Item(id: "fortwalls", name: "fort", nouns: ["fort", "pulaski", "walls", "drawbridge", "moat"],
+             description: "Fort Pulaski itself — a massive brick fortress ringed by a moat, its far wall still scarred where Union rifled cannon breached it in 1862. Exploring the parade ground, the casemates, and the cannon-lined terreplein upstairs is coming in a future update.", isFixture: true))
+
+    var rooms: [String: Room] = [:]
+    func add(_ room: Room) { rooms[room.id] = room }
+
+    add(Room(id: "gate", title: "Fort Pulaski Gates",
+             description: "You drive in through the park gates and along the causeway across the marsh onto Cockspur Island. Ahead, the brick ramparts of Fort Pulaski rise behind their moat. The visitor center is just NORTH.",
+             exits: [.north: "visitorCenter"],
+             items: ["gates", "entrancesign"]))
+    add(Room(id: "visitorCenter", title: "Visitor Center",
+             description: "The Fort Pulaski visitor center: a cool room of exhibits and a bookstore, with a ranger waiting at the desk to check you in. The fort's drawbridge is just INSIDE. A walking path leads NORTH toward the river, past Battery Hambright to the North Pier; the Lighthouse Overlook trailhead is EAST; and your car is parked back SOUTH.",
+             exits: [.south: "gate", .inside: "fort", .north: "batteryHambright", .east: "trail1"],
+             items: ["ranger", "exhibit"]))
+    add(Room(id: "fort", title: "Fort Pulaski",
+             description: "You cross the drawbridge into Fort Pulaski. The parade ground opens before you, casemates ringing the walls and a stone stair climbing to the terreplein — the upper level where the cannons stand watch over the river. (Exploring the fort inside and out, including the cannon-lined upstairs, is coming soon.) The visitor center is back OUTSIDE.",
+             exits: [.outside: "visitorCenter"],
+             items: ["fortwalls"]))
+    add(Room(id: "batteryHambright", title: "Battery Hambright",
+             description: "The path from the visitor center brings you to Battery Hambright, a low concrete gun battery set among the marsh grass, its gun wells empty and open to the sky. The North Pier lies ahead to the NORTH; the visitor center is back SOUTH.",
+             exits: [.south: "visitorCenter", .north: "northPier"],
+             items: ["battery", "marker"]))
+    add(Room(id: "northPier", title: "Historic North Pier",
+             description: "The Historic North Pier reaches out into the channel at the mouth of the Savannah River, where it opens to the Atlantic — a fine spot to watch the river traffic pass. Battery Hambright and the visitor center are back SOUTH.",
+             exits: [.south: "batteryHambright"],
+             items: ["pier", "containership", "coastguard", "pilotboat"]))
+
+    // The Lighthouse Overlook Trail — four stops through marshy maritime woods,
+    // walked FORWARD (deeper) and BACK (toward the fort).
+    add(Room(id: "trail1", title: "Lighthouse Overlook — Trailhead",
+             description: "A flat, sandy path slips into the maritime woods northeast of the fort, live oaks draped in Spanish moss overhead. Fiddler crabs scatter from the path ahead, big claws waving. The trail leads FORWARD into the marsh; the fort is BACK the way you came.",
+             exits: [.north: "trail2", .south: "visitorCenter"],
+             items: ["crabs"]))
+    add(Room(id: "trail2", title: "Lighthouse Overlook — Into the Marsh",
+             description: "The woods open onto broad stands of green cordgrass running to the horizon. Hundreds of fiddler crabs pour sideways into their burrows as your shadow falls across the mud. The path runs FORWARD and BACK.",
+             exits: [.north: "trail3", .south: "trail1"],
+             items: ["crabs"]))
+    add(Room(id: "trail3", title: "Lighthouse Overlook — The Dike",
+             description: "The path climbs onto an old earthen dike, oyster shells crunching underfoot and the salt smell strong on the breeze. More fiddler crabs scurry clear ahead. Continue FORWARD toward the overlook, or head BACK.",
+             exits: [.north: "trail4", .south: "trail2"],
+             items: ["crabs"]))
+    add(Room(id: "trail4", title: "Lighthouse Overlook — The Deck",
+             description: "A small wooden observation deck at the marsh's edge, a pair of mounted binoculars fixed on the channel. Out across the water stands the Cockspur Island Lighthouse. The trail runs BACK the way you came.",
+             exits: [.south: "trail3"],
+             items: ["deck", "binoculars", "lighthouse"]))
 
     return (rooms, items)
 }

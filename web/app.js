@@ -73,6 +73,19 @@
         wavingD3:    "bg_cruise_waving_d3",
         wavingD4:    "bg_cruise_waving_d4",
         fortJackson: "bg_fort_jackson",
+        // Fort Pulaski National Monument — drive in through the gates, check in
+        // at the visitor center, walk out past Battery Hambright to the North
+        // Pier, and follow the Lighthouse Overlook Trail to the Cockspur Island
+        // Lighthouse. (The fort interior is a placeholder for now.)
+        gate:             "bg_pulaski_gate",
+        visitorCenter:    "bg_pulaski_visitor_center",
+        fort:             "bg_pulaski_fort",
+        batteryHambright: "bg_pulaski_battery_hambright",
+        northPier:        "bg_pulaski_north_pier",
+        trail1:           "bg_pulaski_trail_1",
+        trail2:           "bg_pulaski_trail_2",
+        trail3:           "bg_pulaski_trail_3",
+        trail4:           "bg_pulaski_lighthouse_deck",
         // livingRoom and cellar are state-dependent — see backgroundBase().
     };
     // Inlined data-URI sprite (see cat-sprite.js); falls back to a file if absent.
