@@ -279,6 +279,8 @@ final class Game {
             give(rest)
         case "talk", "ask", "speak", "greet":
             talkTo(rest)
+        case "sit", "rest":
+            sitDown()
         case "buy", "purchase":
             buyItem(rest)
         case "coins", "money", "wealth":
@@ -692,6 +694,20 @@ final class Game {
         }
     }
 
+    /// Sit on a bench or other seat in the room (any item of kind "seat").
+    /// The seat's readText is the view from it; a plain line otherwise.
+    private func sitDown() {
+        moves += 1
+        guard canSee else { emit("It's too dark to find a seat."); return }
+        let visible = visibleItemIDs()
+        guard let id = visible.first(where: { items[$0]?.kind == "seat" }),
+              let seat = items[id] else {
+            emit("There's nowhere comfortable to sit here.")
+            return
+        }
+        emit(seat.readText ?? "You rest for a spell on the \(seat.name).")
+    }
+
     /// Buy a for-sale item in the current shop, spending coins.
     private func buyItem(_ words: [String]) {
         moves += 1
@@ -883,6 +899,7 @@ final class Game {
             "  TURN ON / OFF LAMP    — control a light source",
             "  PUT <thing> IN <thing>— place an item in a container",
             "  GIVE <thing> TO <someone> — offer an item",
+            "  SIT                   — rest on a bench, where there is one",
         ]
         if scenario.startingCoins > 0 {
             lines.append("  BUY <thing>           — purchase goods in a shop")
@@ -1323,18 +1340,20 @@ extension Game {
     }
 
     /// Fort Pulaski: a self-guided visit to the National Monument on Cockspur
-    /// Island. Drive in through the gates, check in at the visitor center, then
-    /// walk out past Battery Hambright to the historic North Pier, and follow
-    /// the Lighthouse Overlook Trail through the marsh to the Cockspur Island
-    /// Lighthouse. (The fort itself — inside and out, with its cannon-lined
-    /// upstairs — is left as a placeholder for a future update.)
+    /// Island. Drive in through the gates, check in at the visitor center,
+    /// explore the fort inside and out — the parade ground, the gun casemates,
+    /// the prison casemates of the Immortal 600, the cannon-lined terreplein
+    /// upstairs with its river view, and the shell-scarred southeast angle on
+    /// the moat walk — then head out past Battery Hambright to the North Pier
+    /// and follow the Lighthouse Overlook Trail to the Cockspur Lighthouse.
     static func fortPulaskiScenario() -> Scenario {
-        // The four points of interest the visitor is here to see.
-        let stops = ["checkedIn", "sawBattery", "sawPier", "sawLighthouse"]
+        // The eight points of interest the visitor is here to see.
+        let stops = ["checkedIn", "sawFort", "sawTerreplein", "sawPrison",
+                     "sawBreach", "sawBattery", "sawPier", "sawLighthouse"]
         return Scenario(
             id: "fortPulaski",
             title: "Explore Fort Pulaski",
-            blurb: "Drive onto Cockspur Island to visit Fort Pulaski National Monument: check in at the visitor center, walk out past Battery Hambright to the historic North Pier, and follow the Lighthouse Overlook Trail through the marsh to spy the Cockspur Island Lighthouse.",
+            blurb: "Drive onto Cockspur Island to visit Fort Pulaski National Monument: check in at the visitor center, explore the fort from the parade ground to the cannon-lined terreplein, circle the moat to the shell-scarred walls, watch the ships from the North Pier, and follow the marsh trail to the Cockspur Lighthouse.",
             banner: """
             FORT PULASKI
             A visit to the National Monument on Cockspur Island. (c) 2026
@@ -1342,12 +1361,12 @@ extension Game {
             ─────────────────────────────
             """,
             startRoomID: "gate",
-            maxScore: 25,
+            maxScore: 50,
             startingCoins: 0,
             build: buildFortPulaskiWorld,
             onTalk: { game, id in
                 guard id == "ranger" else { return false }
-                game.emit("Ranger Max leans on the desk. \"Fort Pulaski is named for Casimir Pulaski — a Polish nobleman and cavalry commander, the 'father of the American cavalry,' who fell leading a charge at the Siege of Savannah in 1779. The fort took eighteen years to build, and a young Lieutenant Robert E. Lee helped lay out its dikes. Everyone believed these seven-and-a-half-foot brick walls were invincible — until April 1862, when Union rifled cannon on Tybee Island breached them in about thirty hours and made every masonry fort in the world obsolete overnight. Take the walking path NORTH to Battery Hambright and the North Pier, and don't miss the Lighthouse Overlook Trail heading EAST.\"")
+                game.emit("Ranger Max leans on the desk. \"Fort Pulaski is named for Casimir Pulaski — a Polish nobleman and cavalry commander, the 'father of the American cavalry,' who fell leading a charge at the Siege of Savannah in 1779. The fort took eighteen years to build, and a young Lieutenant Robert E. Lee helped lay out its dikes. Everyone believed these seven-and-a-half-foot brick walls were invincible — until April 1862, when Union rifled cannon on Tybee Island breached them in about thirty hours and made every masonry fort in the world obsolete overnight. The fort itself is just INSIDE across the drawbridge — climb up top for the view, and walk the moat around to see what the cannon fire did. The path NORTH leads to Battery Hambright and the North Pier, and the Lighthouse Overlook Trail heads EAST.\"")
                 return true
             },
             onEnterRoom: { game, roomID in
@@ -1358,12 +1377,20 @@ extension Game {
                     game.set(flag: flag)
                     game.award(points, note)
                     if stops.allSatisfy({ game.has(flag: $0) }) {
-                        game.win("You've driven in through the gates, checked in at the visitor center, walked out to Battery Hambright and the North Pier, and followed the marsh trail to the Cockspur Island Lighthouse. The old fort itself — its drawbridge, casemates, and the cannon-lined terreplein upstairs — waits for another day. (More of Fort Pulaski is coming soon.)")
+                        game.win("You've seen it all: checked in with Ranger Max, crossed the drawbridge to the parade ground, stood among the cannons on the terreplein with the whole river spread below, paid your respects in the prison casemates, run your fingers over the shell-scarred southeast angle, watched the ships from the North Pier, and spied the Cockspur Lighthouse from the marsh trail. Fort Pulaski thanks you for visiting — come back any time.")
                     }
                 }
                 switch roomID {
                 case "visitorCenter":
-                    award("checkedIn", 5, "Ranger Max welcomes you to Fort Pulaski National Monument from behind the desk and checks you in. \"Cockspur Island has guarded the mouth of the Savannah River for a very long time — TALK TO MAX or READ the EXHIBIT to hear the story. The riverside path to Battery Hambright and the North Pier is NORTH, and the Lighthouse Overlook Trail heads EAST.\"")
+                    award("checkedIn", 5, "Ranger Max welcomes you to Fort Pulaski National Monument from behind the desk and checks you in. \"Cockspur Island has guarded the mouth of the Savannah River for a very long time — TALK TO MAX or READ the EXHIBIT to hear the story. The fort is just INSIDE, the riverside path to Battery Hambright and the North Pier is NORTH, and the Lighthouse Overlook Trail heads EAST.\"")
+                case "fort":
+                    award("sawFort", 5, "You step through the sally port onto the parade ground — a broad green field ringed by brick casemate arches, quiet now under the flag. Eighteen years and some twenty-five million bricks went into these walls, finished in 1847, and a young Robert E. Lee helped engineer the site. The gun galleries are NORTH, the prison casemates WEST, and a stone stair climbs UP to the cannons on the terreplein.")
+                case "terreplein":
+                    award("sawTerreplein", 10, "You come up onto the terreplein, the fort's open upper level, and the view stops you flat: the Savannah River spreading to the sea, container ships riding the channel, the little Cockspur Lighthouse on its shell bar below, and the low green line of Tybee Island across the water — where the Union gunners set their batteries in 1862. Great black cannons stand watch along the ramparts, muzzles out over the river they were built to close.")
+                case "prison":
+                    award("sawPrison", 5, "These dim casemates served as a prison. In the winter of 1864–65 they held the \"Immortal 600\" — Confederate officers confined here in the cold on scant rations; thirteen of them never left the island. Rough wooden bunks and names scratched into the brick remember them.")
+                case "scarredWall":
+                    award("sawBreach", 5, "Here it is — the reason this fort changed history. The southeast angle is pocked and cratered with shell strikes, and the smoother, darker patch of brick marks where the wall was breached and rebuilt. On April 10–11, 1862, Union rifled cannon on Tybee Island — a mile away, farther than any smoothbore could reach — chewed through these seven-and-a-half-foot walls in thirty hours. When shells began threatening the powder magazine, Colonel Olmstead surrendered, and every masonry fort on earth was obsolete by lunchtime.")
                 case "batteryHambright":
                     award("sawBattery", 5, "You come to Battery Hambright, a squat concrete gun emplacement half-swallowed by the marsh grass, its gun wells empty and open to the sky. It's named for Lieutenant Horace G. Hambright, a young West Point officer who died out west in 1896 and was honored here in 1904. Poured about 1900 over a foundation of 30,000 bricks salvaged from the original fort village, it was built to guard the river mouth in the Spanish-American War era — yet it never received its guns and never fired a shot.")
                 case "northPier":
@@ -1382,6 +1409,10 @@ extension Game {
                     ])
                 }
                 var todo: [String] = []
+                if !game.has(flag: "sawFort") { todo.append("the parade ground") }
+                if !game.has(flag: "sawTerreplein") { todo.append("the cannons up on the terreplein") }
+                if !game.has(flag: "sawPrison") { todo.append("the prison casemates") }
+                if !game.has(flag: "sawBreach") { todo.append("the shell-scarred southeast angle") }
                 if !game.has(flag: "sawBattery") { todo.append("Battery Hambright") }
                 if !game.has(flag: "sawPier") { todo.append("the North Pier") }
                 if !game.has(flag: "sawLighthouse") { todo.append("the Lighthouse Overlook") }
@@ -1390,7 +1421,8 @@ extension Game {
                 }
                 return (key: "todo:" + todo.joined(separator: "|"), clues: [
                     "Still to explore: \(todo.joined(separator: ", ")).",
-                    "From the visitor center, NORTH walks you past Battery Hambright to the North Pier; EAST starts the Lighthouse Overlook Trail — go FORWARD four stops to the deck and its binoculars, then head BACK.",
+                    "The fort is INSIDE from the visitor center: cross the drawbridge to the parade ground, with the gun casemates NORTH, the prison casemates WEST, and stairs UP to the terreplein. From the drawbridge, SOUTH follows the moat around to the battered southeast wall.",
+                    "Outside the fort: NORTH from the visitor center passes Battery Hambright to the North Pier, and the Lighthouse Overlook Trail heads EAST — go FORWARD four stops to the deck and its binoculars.",
                 ])
             }
         )
@@ -1741,9 +1773,50 @@ private func buildFortPulaskiWorld() -> (rooms: [String: Room], items: [String: 
     add(Item(id: "deck", name: "observation deck", nouns: ["deck", "overlook", "platform"],
              description: "A small wooden observation deck at the marsh's edge.", isFixture: true))
 
-    // The fort itself (placeholder for a future update).
-    add(Item(id: "fortwalls", name: "fort", nouns: ["fort", "pulaski", "walls", "drawbridge", "moat"],
-             description: "Fort Pulaski itself — a massive brick fortress ringed by a moat, its far wall still scarred where Union rifled cannon breached it in 1862. Exploring the parade ground, the casemates, and the cannon-lined terreplein upstairs is coming in a future update.", isFixture: true))
+    // The fort — drawbridge and moat.
+    add(Item(id: "fortwalls", name: "fort", nouns: ["fort", "pulaski", "walls"],
+             description: "Fort Pulaski itself — a massive five-sided brick fortress ringed by a moat, its walls seven and a half feet thick. They were thought invincible until the rifled cannon on Tybee Island proved otherwise in 1862.", isFixture: true))
+    add(Item(id: "drawbridgeItem", name: "drawbridge", nouns: ["drawbridge", "bridge"],
+             description: "A stout wooden drawbridge on chains, spanning the moat to the fort's arched sally port.", isFixture: true))
+    add(Item(id: "moat", name: "moat", nouns: ["moat", "water"],
+             description: "The moat rings the fort, seven feet deep and fed by the tide. Dragonflies stitch the surface — and is that a small alligator gliding along the far bank? It is.", isFixture: true))
+
+    // Parade ground.
+    add(Item(id: "flag", name: "garrison flag", nouns: ["flag", "colors", "flagpole"],
+             description: "The garrison flag riding the sea breeze above the ramparts, just as it did over the 1862 siege.", isFixture: true))
+    add(Item(id: "paradeBench", name: "wooden bench", nouns: ["bench", "benches", "seat"],
+             description: "A simple wooden park bench in the shade at the edge of the parade ground.",
+             readText: "You settle onto the bench at the edge of the parade ground. The flag snaps overhead, swallows loop between the casemate arches, and for a moment the fort is yours alone.",
+             isFixture: true, kind: "seat"))
+
+    // Gun casemates.
+    add(Item(id: "casemateGun", name: "casemate cannon", nouns: ["cannon", "gun", "smoothbore"],
+             description: "A big black smoothbore on its wooden carriage, aimed out through the embrasure at the river channel — exactly the kind of gun the rifled cannon across the water made obsolete.", isFixture: true))
+
+    // Prison casemates.
+    add(Item(id: "bunks", name: "wooden bunks", nouns: ["bunks", "bunk", "beds"],
+             description: "Rows of rough wooden bunks, stacked close in the cold brick chamber where the Immortal 600 were held.", isFixture: true))
+    add(Item(id: "graffiti", name: "carved names", nouns: ["graffiti", "names", "carvings"],
+             description: "Names and dates scratched into the soft brick by prisoners' hands.",
+             readText: "You lean close to the brick and pick out the shallow scratches: initials, a date — 1864 — and a name half-worn away. Men counting days.", isFixture: true))
+
+    // Terreplein.
+    add(Item(id: "cannons", name: "rampart cannons", nouns: ["cannon", "cannons", "gun", "guns"],
+             description: "A rank of great black cannons along the terreplein's ramparts, muzzles trained over the river channel they once commanded.", isFixture: true))
+    add(Item(id: "terrepleinBench", name: "bench", nouns: ["bench", "benches", "seat"],
+             description: "A bench set between two cannons, facing out over the river.",
+             readText: "You sit between the cannons with the wind off the Atlantic in your face, watching a container ship the size of a city block glide past the little lighthouse below. Hard to beat this seat anywhere in Georgia.",
+             isFixture: true, kind: "seat"))
+
+    // Moat walk and the battered southeast angle.
+    add(Item(id: "moatBench", name: "bench", nouns: ["bench", "benches", "seat"],
+             description: "A bench on the grassy bank, facing the fort across the moat.",
+             readText: "You take the bench by the moat. The brick walls rise mirror-doubled in the still water, a heron stalks the reeds, and the dragonflies mind their own business.",
+             isFixture: true, kind: "seat"))
+    add(Item(id: "shells", name: "embedded shells", nouns: ["shell", "shells", "shot", "iron"],
+             description: "Union shot and shell from 1862, still lodged in the brickwork where they struck — round dimples from smoothbores, deep gouges from the rifled guns.", isFixture: true))
+    add(Item(id: "breach", name: "repaired breach", nouns: ["breach", "wall", "scars", "brick", "patch"],
+             description: "The patch of smoother, darker brick marks where the wall was shot through in April 1862 and rebuilt afterward. Around it the original face is cratered like the moon.", isFixture: true))
 
     var rooms: [String: Room] = [:]
     func add(_ room: Room) { rooms[room.id] = room }
@@ -1754,12 +1827,39 @@ private func buildFortPulaskiWorld() -> (rooms: [String: Room], items: [String: 
              items: ["gates", "entrancesign"]))
     add(Room(id: "visitorCenter", title: "Visitor Center",
              description: "The Fort Pulaski visitor center: a cool room of exhibits and a bookstore, where Ranger Max waits at the desk to check you in. The fort's drawbridge is just INSIDE. A walking path leads NORTH toward the river, past Battery Hambright to the North Pier; the Lighthouse Overlook trailhead is EAST; and your car is parked back SOUTH.",
-             exits: [.south: "gate", .inside: "fort", .north: "batteryHambright", .east: "trail1"],
+             exits: [.south: "gate", .inside: "drawbridge", .north: "batteryHambright", .east: "trail1"],
              items: ["ranger", "exhibit"]))
-    add(Room(id: "fort", title: "Fort Pulaski",
-             description: "You cross the drawbridge into Fort Pulaski. The parade ground opens before you, casemates ringing the walls and a stone stair climbing to the terreplein — the upper level where the cannons stand watch over the river. (Exploring the fort inside and out, including the cannon-lined upstairs, is coming soon.) The visitor center is back OUTSIDE.",
-             exits: [.outside: "visitorCenter"],
-             items: ["fortwalls"]))
+
+    // The fort — cross the moat, explore inside and up top, and circle the
+    // walls outside to see what the 1862 cannon fire left behind.
+    add(Room(id: "drawbridge", title: "The Drawbridge",
+             description: "A wooden drawbridge crosses the tidal moat to the fort's arched sally port, brick walls rising sheer from the water. Go INSIDE to the parade ground, follow the grassy bank SOUTH along the moat, or head back OUTSIDE to the visitor center.",
+             exits: [.outside: "visitorCenter", .inside: "fort", .south: "moatWalk"],
+             items: ["fortwalls", "drawbridgeItem", "moat"]))
+    add(Room(id: "fort", title: "Parade Ground",
+             description: "The broad green parade ground inside Fort Pulaski, ringed by brick casemate arches, with the garrison flag overhead. The gun casemates are NORTH, the prison casemates WEST, and a stone stair climbs UP to the terreplein and its cannons. A wooden bench sits in the shade — SIT a while if you like. The sally port leads back OUTSIDE.",
+             exits: [.outside: "drawbridge", .north: "casemates", .west: "prison", .up: "terreplein"],
+             items: ["flag", "paradeBench"]))
+    add(Room(id: "casemates", title: "Gun Casemates",
+             description: "A long gallery of arched brick casemates, cool and echoing, each with a great black cannon aimed out through its embrasure at the river channel. The parade ground is back SOUTH.",
+             exits: [.south: "fort"],
+             items: ["casemateGun"]))
+    add(Room(id: "prison", title: "Prison Casemates",
+             description: "Dim casemates fitted with rows of rough wooden bunks — the prison of the Immortal 600. Names are scratched into the brick (READ them if you dare the chill). The parade ground is back EAST.",
+             exits: [.east: "fort"],
+             items: ["bunks", "graffiti"]))
+    add(Room(id: "terreplein", title: "The Terreplein",
+             description: "The fort's open upper level, high above the parade ground, cannons ranked along the ramparts. The whole mouth of the Savannah River spreads below — ships in the channel, the Cockspur Lighthouse on its bar, Tybee Island on the horizon. A bench faces the water between two guns. The stair leads back DOWN.",
+             exits: [.down: "fort"],
+             items: ["cannons", "terrepleinBench", "lighthouse", "containership"]))
+    add(Room(id: "moatWalk", title: "Along the Moat",
+             description: "A grassy bank between the moat and the marsh, the fort's brick walls doubled in the still water. A bench faces the reflection. The path curls EAST around the walls toward the southeast angle; the drawbridge is back NORTH.",
+             exits: [.north: "drawbridge", .east: "scarredWall"],
+             items: ["moatBench", "moat"]))
+    add(Room(id: "scarredWall", title: "The Battered Southeast Angle",
+             description: "The fort's southeast corner, the face that took the Union bombardment of 1862. The brick is pocked and cratered with shell strikes, iron shot still lodged in the wall, and a broad patch of darker brick marks the repaired breach. Across the water lies Tybee Island, where the batteries fired from. The moat walk leads back WEST.",
+             exits: [.west: "moatWalk"],
+             items: ["shells", "breach"]))
     add(Room(id: "batteryHambright", title: "Battery Hambright",
              description: "The path from the visitor center brings you to Battery Hambright, a low concrete gun battery set among the marsh grass, its gun wells empty and open to the sky. The North Pier lies ahead to the NORTH; the visitor center is back SOUTH.",
              exits: [.south: "visitorCenter", .north: "northPier"],
