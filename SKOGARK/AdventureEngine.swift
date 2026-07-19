@@ -1456,7 +1456,7 @@ extension Game {
                 case "scarredWall":
                     award("sawBreach", 5, "Here it is — the reason this fort changed history. The southeast angle is pocked and cratered with shell strikes, and the smoother, darker patch of brick marks where the wall was breached and rebuilt. On April 10–11, 1862, Union rifled cannon on Tybee Island — a mile away, farther than any smoothbore could reach — chewed through these seven-and-a-half-foot walls in thirty hours. When shells began threatening the powder magazine, Colonel Olmstead surrendered, and every masonry fort on earth was obsolete by lunchtime.")
                 case "batteryHambright":
-                    award("sawBattery", 5, "You come to Battery Hambright, a squat concrete gun emplacement half-swallowed by the marsh grass, its gun wells empty and open to the sky. It's named for Lieutenant Horace G. Hambright, a young West Point officer who died out west in 1896 and was honored here in 1904. Poured about 1900 over a foundation of 30,000 bricks salvaged from the original fort village, it was built to guard the river mouth in the Spanish-American War era — yet it never received its guns and never fired a shot.")
+                    award("sawBattery", 5, "You come to Battery Hambright, a squat concrete gun emplacement half-swallowed by the marsh grass, its gun wells empty and open to the sky. It's named for Lieutenant Horace G. Hambright — the West Point \"Goat\" of 1893, the cadet who graduates dead last in his class — a well-liked young officer who died out west in 1896 and was honored here in 1904. Poured about 1900 over a foundation of 30,000 bricks salvaged from the original fort village, it was built to guard the river mouth in the Spanish-American War era — yet it never received its guns and never fired a shot. Last in his class, and his battery never fired a shot: somehow it fits.")
                 case "northPier":
                     award("sawPier", 5, "Out at the end of the Historic North Pier, you settle in to watch the traffic where the Savannah River meets the sea: a towering container ship slides seaward stacked with steel boxes, a Coast Guard boat throttles past on patrol, and a fast river pilot boat darts out to put a harbor pilot aboard an inbound freighter.")
                 case "trail4":
@@ -1822,11 +1822,11 @@ private func buildFortPulaskiWorld() -> (rooms: [String: Room], items: [String: 
 
     // Battery Hambright.
     add(Item(id: "battery", name: "Battery Hambright", nouns: ["battery", "hambright", "emplacement", "concrete"],
-             description: "A squat, poured-concrete gun battery from around 1900, its gun wells empty and open to the sky. It is named for Lieutenant Horace G. Hambright, a West Point officer who died young in 1896; the battery never received its guns and never fired a shot.",
+             description: "A squat, poured-concrete gun battery from around 1900, its gun wells empty and open to the sky. It is named for Lieutenant Horace G. Hambright, who graduated dead last in the West Point class of 1893 — the class \"Goat\" — and died young in 1896; the battery never received its guns and never fired a shot.",
              isFixture: true))
     add(Item(id: "marker", name: "historical marker", nouns: ["marker", "plaque", "tablet"],
              description: "A cast historical marker beside the battery.",
-             readText: "\"BATTERY HORACE HAMBRIGHT — Built 1899–1900 to guard the mouth of the Savannah River, and named in 1904 for Lt. Horace G. Hambright, U.S.A. Poured over 30,000 bricks salvaged from the original fort construction village. Designed for two rapid-fire 3-inch guns on disappearing mounts; the guns were never installed.\"",
+             readText: "\"BATTERY HORACE HAMBRIGHT — Built 1899–1900 to guard the mouth of the Savannah River, and named in 1904 for Lt. Horace G. Hambright, U.S.A. — last-ranked graduate (the 'Goat') of the West Point class of 1893, remembered fondly by his fellow officers. Poured over 30,000 bricks salvaged from the original fort construction village. Designed for two rapid-fire 3-inch guns on disappearing mounts; the guns were never installed.\"",
              isFixture: true))
 
     // North Pier and the river traffic.
