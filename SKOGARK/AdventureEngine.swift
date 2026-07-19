@@ -255,7 +255,7 @@ final class Game {
         case "go", "walk", "run", "climb", "enter", "crawl", "cross",
              "board", "sail", "depart", "choose", "select", "ride", "catch", "join":
             handleGo(rest)
-        case "examine", "x", "inspect", "read":
+        case "examine", "x", "inspect", "read", "watch", "view":
             if verb == "read" { readItem(rest) } else { examine(rest) }
         case "take", "get", "grab", "pick":
             take(rest.filter { $0 != "up" })
@@ -1425,7 +1425,7 @@ extension Game {
             ─────────────────────────────
             """,
             startRoomID: "gate",
-            maxScore: 55,
+            maxScore: 60,
             startingCoins: 0,
             build: buildFortPulaskiWorld,
             fixtureLine: { _, id in
@@ -1436,6 +1436,8 @@ extension Game {
                     return "A wooden signpost points the way: gun casemates NORTH · prison casemates WEST · Colonel Olmstead's quarters SOUTH · terreplein cannons UP · sally port OUT."
                 case "bridgeSign":
                     return "A small sign by the drawbridge: parade ground IN · moat walk SOUTH · visitor center OUT."
+                case "ballplayers":
+                    return "Across the grass, reenactors in Union blue are deep in a vintage game of base ball — bats cracking, cheers rolling off the casemate walls."
                 default:
                     return nil
                 }
@@ -1461,8 +1463,21 @@ extension Game {
                     award("checkedIn", 5, "Ranger Max welcomes you to Fort Pulaski National Monument from behind the desk and checks you in. \"Cockspur Island has guarded the mouth of the Savannah River for a very long time — TALK TO MAX or READ the EXHIBIT to hear the story. The fort is just INSIDE, the riverside path to Battery Hambright and the North Pier is NORTH, and the Lighthouse Overlook Trail heads EAST. Take a PARK MAP from the desk — READ MAP any time for the lay of the land.\"")
                 case "fort":
                     award("sawFort", 5, "You step through the sally port onto the parade ground — a broad green field ringed by brick casemate arches, quiet now under the flag. Eighteen years and some twenty-five million bricks went into these walls, finished in 1847, and a young Robert E. Lee helped engineer the site. The gun galleries are NORTH, the prison casemates WEST, and a stone stair climbs UP to the cannons on the terreplein.")
+                    // The vintage base ball match, spotted from the terreplein,
+                    // is in full swing when you come back down. Optional bonus.
+                    if game.has(flag: "ballgame"), !game.has(flag: "sawBallgame") {
+                        game.set(flag: "sawBallgame")
+                        game.award(5, "The match is in full swing — bearded men in Union blue swatting a lemon-peel ball and legging it between the sacks, to whoops and hollers off the casemate walls. In 1862 the soldiers of the 48th New York played base ball on this very field, and a photographer caught them at it: one of the earliest photographs of the game ever taken. (WATCH the PLAYERS, or TALK to them.)")
+                    }
                 case "terreplein":
                     award("sawTerreplein", 10, "You come up onto the terreplein, the fort's open upper level, and the view stops you flat: the Savannah River spreading to the sea, container ships riding the channel, the little Cockspur Lighthouse on its shell bar below, and the low green line of Tybee Island across the water — where the Union gunners set their batteries in 1862. Great black cannons stand watch along the ramparts, muzzles out over the river they were built to close.")
+                    // From up top you spot the living-history ballgame forming
+                    // below — reason to come back down to the parade ground.
+                    if !game.has(flag: "ballgame"), !game.isWon {
+                        game.set(flag: "ballgame")
+                        game.revealItem("ballplayers", inRoom: "fort")
+                        game.emit("Down on the parade ground below, a crowd of reenactors in Union blue is gathering on the grass — choosing up sides, bats over shoulders, for a vintage game of base ball. Worth heading back DOWN to watch.")
+                    }
                 case "prison":
                     award("sawPrison", 5, "These dim casemates served as a prison. In the winter of 1864–65 they held the \"Immortal 600\" — Confederate officers confined here in the cold on scant rations; thirteen of them never left the island. Rough wooden bunks and names scratched into the brick remember them.")
                 case "quarters":
@@ -1871,6 +1886,13 @@ private func buildFortPulaskiWorld() -> (rooms: [String: Room], items: [String: 
              description: "A stout wooden drawbridge on chains, spanning the moat to the fort's arched sally port.", isFixture: true))
     add(Item(id: "moat", name: "moat", nouns: ["moat", "water"],
              description: "The moat rings the fort, seven feet deep and fed by the tide. Dragonflies stitch the surface — and is that a small alligator gliding along the far bank? It is.", isFixture: true))
+
+    // The vintage base ball match — revealed on the parade ground once
+    // spotted from the terreplein. WATCH PLAYERS is the main event.
+    add(Item(id: "ballplayers", name: "ballplayers", nouns: ["players", "ballplayers", "player", "game", "match", "baseball", "ball", "reenactors", "soldiers"],
+             description: "You watch an inning. The striker squares up, the pitcher lobs the lemon-peel ball underhand, and — CRACK — it sails over the shortscout's head. The runner tears around the sacks in his wool uniform while the fielders give chase bare-handed, and the whole garrison seems to cheer. Behind them, a fellow with a box camera on a tripod is fussing with his plates, recreating the famous photograph: the 48th New York at play on this parade ground in 1862 — one of the earliest photographs of baseball ever taken.",
+             isFixture: true, isCreature: true,
+             dialogue: "\"Straight out of the 1862 photograph!\" a player calls, tapping his bat. \"The Forty-Eighth New York played ball right here between drills — earliest picture of the game anyone knows of. Rules of the day: underhand pitching, no gloves, and a ball caught on one bounce is an out. Stay for an inning!\""))
 
     // Wayfinding signs inside the fort.
     add(Item(id: "paradeSign", name: "signpost", nouns: ["signpost", "sign", "signs"],
