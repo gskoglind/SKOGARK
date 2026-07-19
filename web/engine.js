@@ -1213,6 +1213,18 @@ function fortPulaskiScenario() {
         maxScore: 55,
         startingCoins: 0,
         build: buildFortPulaskiWorld,
+        fixtureLine(game, id) {
+            // Wayfinding signs print on every visit, not just the first,
+            // so the fort never leaves you guessing which way is which.
+            switch (id) {
+                case "paradeSign":
+                    return "A wooden signpost points the way: gun casemates NORTH · prison casemates WEST · Colonel Olmstead's quarters SOUTH · terreplein cannons UP · sally port OUT.";
+                case "bridgeSign":
+                    return "A small sign by the drawbridge: parade ground IN · moat walk SOUTH · visitor center OUT.";
+                default:
+                    return null;
+            }
+        },
         onTalk(game, id) {
             if (id !== "ranger") return false;
             game.emit("Ranger Max leans on the desk. \"Fort Pulaski is named for Casimir Pulaski — a Polish nobleman and cavalry commander, the 'father of the American cavalry,' who fell leading a charge at the Siege of Savannah in 1779. The fort took eighteen years to build, and a young Lieutenant Robert E. Lee helped lay out its dikes. Everyone believed these seven-and-a-half-foot brick walls were invincible — until April 1862, when Union rifled cannon on Tybee Island breached them in about thirty hours and made every masonry fort in the world obsolete overnight. The fort itself is just INSIDE across the drawbridge — climb up top for the view, and walk the moat around to see what the cannon fire did. The path NORTH leads to Battery Hambright and the North Pier, and the Lighthouse Overlook Trail heads EAST.\"");
@@ -1602,6 +1614,12 @@ function buildFortPulaskiWorld() {
     addItem({ id: "moat", name: "moat", nouns: ["moat", "water"],
         description: "The moat rings the fort, seven feet deep and fed by the tide. Dragonflies stitch the surface — and is that a small alligator gliding along the far bank? It is.", isFixture: true });
 
+    // Wayfinding signs inside the fort.
+    addItem({ id: "paradeSign", name: "signpost", nouns: ["signpost", "sign", "signs"],
+        description: "A weathered wooden signpost with arms pointing every which way: gun casemates NORTH, prison casemates WEST, Colonel Olmstead's quarters SOUTH, the terreplein UP, and the sally port OUT.", isFixture: true });
+    addItem({ id: "bridgeSign", name: "sign", nouns: ["sign", "signs", "signpost"],
+        description: "A small park sign: parade ground IN across the drawbridge, moat walk SOUTH along the bank, visitor center back OUT.", isFixture: true });
+
     // Parade ground.
     addItem({ id: "flag", name: "garrison flag", nouns: ["flag", "colors", "flagpole"],
         description: "The garrison flag riding the sea breeze above the ramparts, just as it did over the 1862 siege.", isFixture: true });
@@ -1665,10 +1683,10 @@ function buildFortPulaskiWorld() {
     // walls outside to see what the 1862 cannon fire left behind.
     addRoom({ id: "drawbridge", title: "The Drawbridge",
         description: "A wooden drawbridge crosses the tidal moat to the fort's arched sally port, brick walls rising sheer from the water. Go INSIDE to the parade ground, follow the grassy bank SOUTH along the moat, or head back OUTSIDE to the visitor center.",
-        exits: { outside: "visitorCenter", inside: "fort", south: "moatWalk" }, items: ["fortwalls", "drawbridgeItem", "moat"] });
+        exits: { outside: "visitorCenter", inside: "fort", south: "moatWalk" }, items: ["fortwalls", "drawbridgeItem", "moat", "bridgeSign"] });
     addRoom({ id: "fort", title: "Parade Ground",
         description: "The broad green parade ground inside Fort Pulaski, ringed by brick casemate arches, with the garrison flag overhead. The gun casemates are NORTH, the prison casemates WEST, Colonel Olmstead's quarters SOUTH, and a stone stair climbs UP to the terreplein and its cannons. A wooden bench sits in the shade — SIT a while if you like. The sally port leads back OUTSIDE.",
-        exits: { outside: "drawbridge", north: "casemates", west: "prison", south: "quarters", up: "terreplein" }, items: ["flag", "paradeBench"] });
+        exits: { outside: "drawbridge", north: "casemates", west: "prison", south: "quarters", up: "terreplein" }, items: ["flag", "paradeBench", "paradeSign"] });
     addRoom({ id: "quarters", title: "Colonel Olmstead's Quarters",
         description: "The colonel's quarters off the parade ground, kept as they were in 1862 — a narrow bed, a plain writing table, and framed pictures on the wall of the surrender that happened in this very room (READ the PICTURES). The parade ground is back NORTH.",
         exits: { north: "fort" }, items: ["surrenderTable", "pictures"] });
