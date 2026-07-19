@@ -377,6 +377,7 @@ struct GameView: View {
         case "drawbridge":       return "bg_pulaski_drawbridge"
         case "casemates":        return "bg_pulaski_casemates"
         case "prison":           return "bg_pulaski_prison"
+        case "quarters":         return "bg_pulaski_quarters"
         case "terreplein":       return "bg_pulaski_terreplein"
         case "moatWalk":         return "bg_pulaski_moat_walk"
         case "scarredWall":      return "bg_pulaski_scarred_wall"

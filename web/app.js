@@ -83,6 +83,7 @@
         drawbridge:       "bg_pulaski_drawbridge",
         casemates:        "bg_pulaski_casemates",
         prison:           "bg_pulaski_prison",
+        quarters:         "bg_pulaski_quarters",
         terreplein:       "bg_pulaski_terreplein",
         moatWalk:         "bg_pulaski_moat_walk",
         scarredWall:      "bg_pulaski_scarred_wall",

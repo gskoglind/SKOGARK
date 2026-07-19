@@ -1411,9 +1411,9 @@ extension Game {
     /// the moat walk — then head out past Battery Hambright to the North Pier
     /// and follow the Lighthouse Overlook Trail to the Cockspur Lighthouse.
     static func fortPulaskiScenario() -> Scenario {
-        // The eight points of interest the visitor is here to see.
+        // The nine points of interest the visitor is here to see.
         let stops = ["checkedIn", "sawFort", "sawTerreplein", "sawPrison",
-                     "sawBreach", "sawBattery", "sawPier", "sawLighthouse"]
+                     "sawSurrender", "sawBreach", "sawBattery", "sawPier", "sawLighthouse"]
         return Scenario(
             id: "fortPulaski",
             title: "Explore Fort Pulaski",
@@ -1425,7 +1425,7 @@ extension Game {
             ─────────────────────────────
             """,
             startRoomID: "gate",
-            maxScore: 50,
+            maxScore: 55,
             startingCoins: 0,
             build: buildFortPulaskiWorld,
             onTalk: { game, id in
@@ -1441,7 +1441,7 @@ extension Game {
                     game.set(flag: flag)
                     game.award(points, note)
                     if stops.allSatisfy({ game.has(flag: $0) }) {
-                        game.win("You've seen it all: checked in with Ranger Max, crossed the drawbridge to the parade ground, stood among the cannons on the terreplein with the whole river spread below, paid your respects in the prison casemates, run your fingers over the shell-scarred southeast angle, watched the ships from the North Pier, and spied the Cockspur Lighthouse from the marsh trail. Fort Pulaski thanks you for visiting — come back any time.")
+                        game.win("You've seen it all: checked in with Ranger Max, crossed the drawbridge to the parade ground, stood among the cannons on the terreplein with the whole river spread below, paid your respects in the prison casemates, stood in the room where Colonel Olmstead gave up his sword, run your fingers over the shell-scarred southeast angle, watched the ships from the North Pier, and spied the Cockspur Lighthouse from the marsh trail. Fort Pulaski thanks you for visiting — come back any time.")
                     }
                 }
                 switch roomID {
@@ -1453,6 +1453,8 @@ extension Game {
                     award("sawTerreplein", 10, "You come up onto the terreplein, the fort's open upper level, and the view stops you flat: the Savannah River spreading to the sea, container ships riding the channel, the little Cockspur Lighthouse on its shell bar below, and the low green line of Tybee Island across the water — where the Union gunners set their batteries in 1862. Great black cannons stand watch along the ramparts, muzzles out over the river they were built to close.")
                 case "prison":
                     award("sawPrison", 5, "These dim casemates served as a prison. In the winter of 1864–65 they held the \"Immortal 600\" — Confederate officers confined here in the cold on scant rations; thirteen of them never left the island. Rough wooden bunks and names scratched into the brick remember them.")
+                case "quarters":
+                    award("sawSurrender", 5, "You step into Colonel Olmstead's quarters, kept much as they looked on April 11, 1862. Framed pictures on the wall show the scene: at 2:30 that afternoon, with the southeast wall breached and Union shells reaching for the twenty tons of powder in the magazine, the 25-year-old colonel — who had answered the surrender demand a day earlier with \"I am here to defend the fort, not to surrender it\" — handed his sword across this table to the Union officers. Days later, General David Hunter sent the sword back: the defense had been honorable. In the whole thirty-hour battle, only two men died — one from each side. The sword itself rests in the visitor center museum.")
                 case "scarredWall":
                     award("sawBreach", 5, "Here it is — the reason this fort changed history. The southeast angle is pocked and cratered with shell strikes, and the smoother, darker patch of brick marks where the wall was breached and rebuilt. On April 10–11, 1862, Union rifled cannon on Tybee Island — a mile away, farther than any smoothbore could reach — chewed through these seven-and-a-half-foot walls in thirty hours. When shells began threatening the powder magazine, Colonel Olmstead surrendered, and every masonry fort on earth was obsolete by lunchtime.")
                 case "batteryHambright":
@@ -1476,6 +1478,7 @@ extension Game {
                 if !game.has(flag: "sawFort") { todo.append("the parade ground") }
                 if !game.has(flag: "sawTerreplein") { todo.append("the cannons up on the terreplein") }
                 if !game.has(flag: "sawPrison") { todo.append("the prison casemates") }
+                if !game.has(flag: "sawSurrender") { todo.append("Colonel Olmstead's quarters") }
                 if !game.has(flag: "sawBreach") { todo.append("the shell-scarred southeast angle") }
                 if !game.has(flag: "sawBattery") { todo.append("Battery Hambright") }
                 if !game.has(flag: "sawPier") { todo.append("the North Pier") }
@@ -1485,7 +1488,7 @@ extension Game {
                 }
                 return (key: "todo:" + todo.joined(separator: "|"), clues: [
                     "Still to explore: \(todo.joined(separator: ", ")).",
-                    "The fort is INSIDE from the visitor center: cross the drawbridge to the parade ground, with the gun casemates NORTH, the prison casemates WEST, and stairs UP to the terreplein. From the drawbridge, SOUTH follows the moat around to the battered southeast wall.",
+                    "The fort is INSIDE from the visitor center: cross the drawbridge to the parade ground, with the gun casemates NORTH, the prison casemates WEST, Colonel Olmstead's quarters SOUTH, and stairs UP to the terreplein. From the drawbridge, SOUTH follows the moat around to the battered southeast wall.",
                     "Outside the fort: NORTH from the visitor center passes Battery Hambright to the North Pier, and the Lighthouse Overlook Trail heads EAST — go FORWARD four stops to the deck and its binoculars.",
                 ])
             }
@@ -1805,7 +1808,7 @@ private func buildFortPulaskiWorld() -> (rooms: [String: Room], items: [String: 
              isTakeable: true,
              readText: """
              "FORT PULASKI — PARK MAP
-               • The fort: INSIDE across the drawbridge. On the parade ground, the gun casemates are NORTH, the prison casemates WEST, and stairs lead UP to the cannons on the terreplein.
+               • The fort: INSIDE across the drawbridge. On the parade ground, the gun casemates are NORTH, the prison casemates WEST, Colonel Olmstead's quarters (the surrender room) SOUTH, and stairs lead UP to the cannons on the terreplein.
                • Moat walk: SOUTH from the drawbridge, then EAST to the shell-scarred southeast angle.
                • Battery Hambright & the North Pier: NORTH along the riverside path.
                • Lighthouse Overlook Trail: EAST of the visitor center — FORWARD four stops to the observation deck.
@@ -1865,6 +1868,18 @@ private func buildFortPulaskiWorld() -> (rooms: [String: Room], items: [String: 
              readText: "You settle onto the bench at the edge of the parade ground. The flag snaps overhead, swallows loop between the casemate arches, and for a moment the fort is yours alone.",
              isFixture: true, kind: "seat"))
 
+    // Colonel Olmstead's quarters — the surrender room.
+    add(Item(id: "surrenderTable", name: "writing table", nouns: ["table", "desk"],
+             description: "The plain writing table where, on April 11, 1862, Colonel Olmstead handed over his sword and signed away the fort.", isFixture: true))
+    add(Item(id: "pictures", name: "framed pictures", nouns: ["pictures", "picture", "photos", "photographs", "frames"],
+             description: "Framed period pictures of the surrender that took place in this room.",
+             readText: "You study the framed pictures: Union officers crowd the small room, hats in hand, while Colonel Olmstead stands at the table, sword reversed, hilt offered. The caption reads: \"Surrender of Fort Pulaski — April 11, 1862, 2:30 p.m.\"",
+             isFixture: true))
+
+    // Olmstead's sword, displayed in the visitor center museum.
+    add(Item(id: "sword", name: "Olmstead's sword", nouns: ["sword", "olmstead", "saber", "sabre"],
+             description: "Colonel Charles Olmstead's own sword, resting in a museum case — the one he handed over when the fort fell in April 1862, and which General David Hunter sent back to him days later because the surrender had been honorable.", isFixture: true))
+
     // Gun casemates.
     add(Item(id: "casemateGun", name: "casemate cannon", nouns: ["cannon", "gun", "smoothbore"],
              description: "A big black smoothbore on its wooden carriage, aimed out through the embrasure at the river channel — exactly the kind of gun the rifled cannon across the water made obsolete.", isFixture: true))
@@ -1904,7 +1919,7 @@ private func buildFortPulaskiWorld() -> (rooms: [String: Room], items: [String: 
     add(Room(id: "visitorCenter", title: "Visitor Center",
              description: "The Fort Pulaski visitor center: a cool room of exhibits and a bookstore, where Ranger Max waits at the desk to check you in. The fort's drawbridge is just INSIDE. A walking path leads NORTH toward the river, past Battery Hambright to the North Pier; the Lighthouse Overlook trailhead is EAST; and your car is parked back SOUTH.",
              exits: [.south: "gate", .inside: "drawbridge", .north: "batteryHambright", .east: "trail1"],
-             items: ["ranger", "exhibit", "map"]))
+             items: ["ranger", "exhibit", "map", "sword"]))
 
     // The fort — cross the moat, explore inside and up top, and circle the
     // walls outside to see what the 1862 cannon fire left behind.
@@ -1913,9 +1928,13 @@ private func buildFortPulaskiWorld() -> (rooms: [String: Room], items: [String: 
              exits: [.outside: "visitorCenter", .inside: "fort", .south: "moatWalk"],
              items: ["fortwalls", "drawbridgeItem", "moat"]))
     add(Room(id: "fort", title: "Parade Ground",
-             description: "The broad green parade ground inside Fort Pulaski, ringed by brick casemate arches, with the garrison flag overhead. The gun casemates are NORTH, the prison casemates WEST, and a stone stair climbs UP to the terreplein and its cannons. A wooden bench sits in the shade — SIT a while if you like. The sally port leads back OUTSIDE.",
-             exits: [.outside: "drawbridge", .north: "casemates", .west: "prison", .up: "terreplein"],
+             description: "The broad green parade ground inside Fort Pulaski, ringed by brick casemate arches, with the garrison flag overhead. The gun casemates are NORTH, the prison casemates WEST, Colonel Olmstead's quarters SOUTH, and a stone stair climbs UP to the terreplein and its cannons. A wooden bench sits in the shade — SIT a while if you like. The sally port leads back OUTSIDE.",
+             exits: [.outside: "drawbridge", .north: "casemates", .west: "prison", .south: "quarters", .up: "terreplein"],
              items: ["flag", "paradeBench"]))
+    add(Room(id: "quarters", title: "Colonel Olmstead's Quarters",
+             description: "The colonel's quarters off the parade ground, kept as they were in 1862 — a narrow bed, a plain writing table, and framed pictures on the wall of the surrender that happened in this very room (READ the PICTURES). The parade ground is back NORTH.",
+             exits: [.north: "fort"],
+             items: ["surrenderTable", "pictures"]))
     add(Room(id: "casemates", title: "Gun Casemates",
              description: "A long gallery of arched brick casemates, cool and echoing, each with a great black cannon aimed out through its embrasure at the river channel. The parade ground is back SOUTH.",
              exits: [.south: "fort"],
