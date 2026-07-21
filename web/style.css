@@ -124,6 +124,38 @@ body {
     color: #b0b0b0;
 }
 
+/* Destination cards on the opening screen: name over a slice of that
+   destination's artwork. */
+.scenario.destination {
+    min-height: 96px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    background-size: cover;
+    background-position: center;
+}
+
+.scenario.destination .scenario-blurb {
+    color: #d8d8d8;
+}
+
+.menu-back {
+    background: none;
+    border: none;
+    color: #4ade80;
+    font: inherit;
+    font-size: 15px;
+    cursor: pointer;
+    padding: 8px;
+    align-self: flex-start;
+}
+
+.menu-back:hover,
+.menu-back:focus-visible {
+    text-decoration: underline;
+    outline: none;
+}
+
 /* ---- Game ---- */
 
 #game {

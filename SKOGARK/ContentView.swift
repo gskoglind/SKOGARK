@@ -39,9 +39,19 @@ struct ContentView: View {
     }
 }
 
-/// The scenario chooser.
+/// The two-step chooser: pick a destination, then one of its adventures.
 struct MenuView: View {
     let onSelect: (Scenario) -> Void
+    @State private var destination: String? = nil
+
+    /// Destinations in the order their scenarios are registered.
+    private var destinations: [String] {
+        var seen: [String] = []
+        for scenario in Game.scenarios where !seen.contains(scenario.destination) {
+            seen.append(scenario.destination)
+        }
+        return seen
+    }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -51,35 +61,37 @@ struct MenuView: View {
                 Text("SKOGARK")
                     .font(.system(size: 40, weight: .bold, design: .monospaced))
                     .foregroundStyle(.green)
-                Text("A tiny text adventure")
+                Text(destination ?? "Tiny text adventures. Where to?")
                     .font(.system(.subheadline, design: .monospaced))
                     .foregroundStyle(Color(white: 0.6))
             }
 
             VStack(spacing: 14) {
-                ForEach(Game.scenarios) { scenario in
-                    Button {
-                        onSelect(scenario)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(scenario.title)
-                                .font(.system(.title3, design: .monospaced).weight(.semibold))
-                                .foregroundStyle(.green)
-                            Text(scenario.blurb)
-                                .font(.system(.footnote, design: .monospaced))
-                                .foregroundStyle(Color(white: 0.7))
-                                .multilineTextAlignment(.leading)
-                                .fixedSize(horizontal: false, vertical: true)
+                if let destination {
+                    ForEach(Game.scenarios.filter { $0.destination == destination }) { scenario in
+                        Button { onSelect(scenario) } label: {
+                            scenarioCard(scenario)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                        .background(Color(white: 0.10), in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .strokeBorder(Color(white: 0.25), lineWidth: 1)
-                        )
+                        .buttonStyle(.plain)
+                    }
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { self.destination = nil }
+                    } label: {
+                        Label("All destinations", systemImage: "chevron.left")
+                            .font(.system(.subheadline, design: .monospaced))
+                            .foregroundStyle(.green)
                     }
                     .buttonStyle(.plain)
+                    .padding(.top, 4)
+                } else {
+                    ForEach(destinations, id: \.self) { name in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) { destination = name }
+                        } label: {
+                            destinationCard(name)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
             .frame(maxWidth: 480)
@@ -90,6 +102,69 @@ struct MenuView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
+    }
+
+    /// A destination card: its name over a slice of that destination's art.
+    private func destinationCard(_ name: String) -> some View {
+        let count = Game.scenarios.filter { $0.destination == name }.count
+        return ZStack(alignment: .bottomLeading) {
+            if let asset = Self.destinationArt(name), let image = UIImage(named: asset) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 110)
+                    .clipped()
+                    .overlay(LinearGradient(colors: [.clear, .black.opacity(0.75)],
+                                            startPoint: .top, endPoint: .bottom))
+            } else {
+                Color(white: 0.10).frame(height: 110)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name)
+                    .font(.system(.title3, design: .monospaced).weight(.semibold))
+                    .foregroundStyle(.green)
+                Text(count == 1 ? "1 adventure" : "\(count) adventures")
+                    .font(.system(.footnote, design: .monospaced))
+                    .foregroundStyle(Color(white: 0.8))
+            }
+            .padding(12)
+        }
+        .frame(maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color(white: 0.25), lineWidth: 1)
+        )
+    }
+
+    private func scenarioCard(_ scenario: Scenario) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(scenario.title)
+                .font(.system(.title3, design: .monospaced).weight(.semibold))
+                .foregroundStyle(.green)
+            Text(scenario.blurb)
+                .font(.system(.footnote, design: .monospaced))
+                .foregroundStyle(Color(white: 0.7))
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color(white: 0.10), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color(white: 0.25), lineWidth: 1)
+        )
+    }
+
+    /// The artwork slice behind each destination card (landscape variants).
+    static func destinationArt(_ name: String) -> String? {
+        switch name {
+        case "Explore":  return "bg_west_of_house_landscape"
+        case "Savannah": return "bg_pulaski_terreplein_landscape"
+        case "Japan":    return "bg_fuji_summit_landscape"
+        default:         return nil
+        }
     }
 }
 
@@ -280,7 +355,7 @@ struct GameView: View {
     /// room, lit state (cellar), and whether the rug has been moved (living
     /// room) — so each transition cross-fades.
     private var sceneKey: String {
-        "\(game.roomID)-\(game.canSeeRoom)-\(game.has(flag: "rugMoved"))-\(game.has(flag: "cruise_sunset"))-\(game.has(flag: "cruise_afternoon"))"
+        "\(game.roomID)-\(game.canSeeRoom)-\(game.has(flag: "rugMoved"))-\(game.has(flag: "cruise_sunset"))-\(game.has(flag: "cruise_afternoon"))-\(game.has(flag: "ateRamen"))-\(game.has(flag: "weatherReady"))"
     }
 
     /// The stray cat that loiters at the fishmonger's stall, hoping for a
@@ -387,6 +462,40 @@ struct GameView: View {
         case "trail2":           return "bg_pulaski_trail_2"
         case "trail3":           return "bg_pulaski_trail_3"
         case "trail4":           return "bg_pulaski_lighthouse_deck"
+        // Roppongi Pub Crawl — up from the Hibiya Line into the neon crossing,
+        // the three bars of the classic crawl, and the dawn ramen stand.
+        // Once the ramen is eaten, the 05:12 first train waits at the platform.
+        case "roppongiStation": return game.has(flag: "ateRamen") ? "bg_roppongi_first_train" : "bg_roppongi_station"
+        case "crossing":        return "bg_roppongi_crossing"
+        case "geronimos":       return "bg_roppongi_geronimos"
+        case "sideStreet":      return "bg_roppongi_side_street"
+        case "mogambos":        return "bg_roppongi_mogambos"
+        case "quest":           return "bg_roppongi_quest"
+        case "ramenya":         return "bg_roppongi_ramenya"
+        case "ticketMachine":   return "bg_roppongi_ticket_machine"
+        case "trainCar":        return "bg_roppongi_train_interior"
+        case "transferStation": return "bg_roppongi_transfer"
+        case "homeStation":     return "bg_roppongi_home_station"
+        case "wrongTerminus":   return "bg_roppongi_missed_stop"
+        case "fareAdjust":      return "bg_roppongi_fare_adjustment"
+        // Mount Fuji — the Yoshida Trail night climb from the Fifth Station to
+        // the summit. The ninth station is dark until the headlamp is lit, so
+        // it swaps between dark and lamplit art like the cellar.
+        case "fifthStation":  return "bg_fuji_fifth_station"
+        case "sixthStation":  return "bg_fuji_sixth_station"
+        case "seventhHut":    return "bg_fuji_seventh_hut"
+        // On a rain or cold-wind night, Taishikan sits in the storm until the
+        // climber shelters, and the summit's goraiko breaks through clouds.
+        case "eighthHut":
+            let badWeather = game.has(flag: "weatherRain") || game.has(flag: "weatherCold")
+            return badWeather && !game.has(flag: "weatherReady") ? "bg_fuji_storm" : "bg_fuji_eighth_hut"
+        case "ninthStation":  return game.canSeeRoom ? "bg_fuji_ninth_lit" : "bg_fuji_ninth_dark"
+        case "summit":
+            return game.has(flag: "weatherRain") || game.has(flag: "weatherCold")
+                ? "bg_fuji_summit_clouded" : "bg_fuji_summit"
+        case "postOffice":    return "bg_fuji_post_office"
+        case "craterRim":     return "bg_fuji_crater_rim"
+        case "kengamine":     return "bg_fuji_kengamine"
         default:            return nil
         }
     }

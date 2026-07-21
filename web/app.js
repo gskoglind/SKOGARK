@@ -93,7 +93,32 @@
         trail2:           "bg_pulaski_trail_2",
         trail3:           "bg_pulaski_trail_3",
         trail4:           "bg_pulaski_lighthouse_deck",
-        // livingRoom and cellar are state-dependent — see backgroundBase().
+        // Roppongi Pub Crawl — up from the Hibiya Line into the neon crossing,
+        // the three bars of the classic crawl, the dawn ramen stand, and the
+        // ride home on the 05:12. (roppongiStation is state-dependent — see
+        // backgroundBase().)
+        crossing:         "bg_roppongi_crossing",
+        geronimos:        "bg_roppongi_geronimos",
+        sideStreet:       "bg_roppongi_side_street",
+        mogambos:         "bg_roppongi_mogambos",
+        quest:            "bg_roppongi_quest",
+        ramenya:          "bg_roppongi_ramenya",
+        ticketMachine:    "bg_roppongi_ticket_machine",
+        trainCar:         "bg_roppongi_train_interior",
+        transferStation:  "bg_roppongi_transfer",
+        homeStation:      "bg_roppongi_home_station",
+        wrongTerminus:    "bg_roppongi_missed_stop",
+        fareAdjust:       "bg_roppongi_fare_adjustment",
+        // Mount Fuji — the Yoshida Trail night climb from the Fifth Station to
+        // the summit.
+        fifthStation:     "bg_fuji_fifth_station",
+        sixthStation:     "bg_fuji_sixth_station",
+        seventhHut:       "bg_fuji_seventh_hut",
+        postOffice:       "bg_fuji_post_office",
+        craterRim:        "bg_fuji_crater_rim",
+        kengamine:        "bg_fuji_kengamine",
+        // livingRoom, cellar, roppongiStation, and Fuji's eighthHut /
+        // ninthStation / summit are state-dependent — see backgroundBase().
     };
     // Inlined data-URI sprite (see cat-sprite.js); falls back to a file if absent.
     const CAT_SPRITE = window.SKOGARK_CAT_SPRITE || "images/cat_sprite.png";
@@ -108,6 +133,24 @@
         }
         if (roomID === "livingRoom") {
             return (game && game.has("rugMoved")) ? "bg_living_room_open" : "bg_living_room";
+        }
+        // Fuji's ninth station is dark until the headlamp comes on.
+        if (roomID === "ninthStation") {
+            return (game && game.canSee()) ? "bg_fuji_ninth_lit" : "bg_fuji_ninth_dark";
+        }
+        // Once the ramen is eaten, the 05:12 first train waits at the platform.
+        if (roomID === "roppongiStation") {
+            return (game && game.has("ateRamen")) ? "bg_roppongi_first_train" : "bg_roppongi_station";
+        }
+        // On a rain or cold-wind night, Taishikan sits in the storm until the
+        // climber shelters, and the summit's goraiko breaks through clouds.
+        if (roomID === "eighthHut") {
+            const bad = game && (game.has("weatherRain") || game.has("weatherCold"));
+            return (bad && !game.has("weatherReady")) ? "bg_fuji_storm" : "bg_fuji_eighth_hut";
+        }
+        if (roomID === "summit") {
+            const bad = game && (game.has("weatherRain") || game.has("weatherCold"));
+            return bad ? "bg_fuji_summit_clouded" : "bg_fuji_summit";
         }
         const base = ROOM_BACKGROUNDS[roomID] || null;
         // The 7:00 Sunset Cruise swaps in warm dusk art (no narration; a DJ
@@ -477,8 +520,47 @@
         camsFrame.src = "about:blank"; // stop the stream when hidden
     }
 
-    function buildMenu() {
-        for (const scenario of SCENARIOS) {
+    // The artwork slice behind each destination card on the opening screen.
+    const DESTINATION_ART = {
+        Explore:  "bg_west_of_house_landscape",
+        Savannah: "bg_pulaski_terreplein_landscape",
+        Japan:    "bg_fuji_summit_landscape",
+    };
+    const taglineEl = document.querySelector("#menu .tagline");
+
+    // Two-step chooser: destination cards first, then that destination's
+    // adventures with a way back.
+    function buildMenu(destination = null) {
+        scenarioList.textContent = "";
+        if (taglineEl) taglineEl.textContent = destination || "Tiny text adventures. Where to?";
+
+        if (!destination) {
+            const names = [];
+            for (const s of SCENARIOS) if (!names.includes(s.destination)) names.push(s.destination);
+            for (const name of names) {
+                const count = SCENARIOS.filter((s) => s.destination === name).length;
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "scenario destination";
+                const art = DESTINATION_ART[name];
+                if (art) {
+                    button.style.backgroundImage =
+                        `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.8)), url("images/${art}.png")`;
+                }
+                const title = document.createElement("div");
+                title.className = "scenario-title";
+                title.textContent = name;
+                const blurb = document.createElement("div");
+                blurb.className = "scenario-blurb";
+                blurb.textContent = count === 1 ? "1 adventure" : `${count} adventures`;
+                button.append(title, blurb);
+                button.addEventListener("click", () => buildMenu(name));
+                scenarioList.appendChild(button);
+            }
+            return;
+        }
+
+        for (const scenario of SCENARIOS.filter((s) => s.destination === destination)) {
             const button = document.createElement("button");
             button.type = "button";
             button.className = "scenario";
@@ -495,6 +577,12 @@
             button.addEventListener("click", () => startGame(scenario));
             scenarioList.appendChild(button);
         }
+        const back = document.createElement("button");
+        back.type = "button";
+        back.className = "menu-back";
+        back.textContent = "‹ All destinations";
+        back.addEventListener("click", () => buildMenu());
+        scenarioList.appendChild(back);
     }
 
     function startGame(scenario) {
