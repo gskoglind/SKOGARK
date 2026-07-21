@@ -131,6 +131,9 @@ struct Scenario: Identifiable {
     var onPut: ((Game, _ object: String, _ target: String) -> Void)? = nil
     /// Handles TALK to a creature; return true if handled.
     var onTalk: ((Game, String) -> Bool)? = nil
+    /// Handles EXAMINE/LOOK AT of an item; return true if handled. Lets a
+    /// scenario make looking at something matter (sights, spotting).
+    var onExamine: ((Game, String) -> Bool)? = nil
     /// Reacts to the player arriving in a room, after its description prints.
     var onEnterRoom: ((Game, _ roomID: String) -> Void)? = nil
     /// Progressive, context-aware hints: returns the current puzzle-stage key
@@ -176,7 +179,7 @@ final class Game {
     private var hintStageKey = ""
 
     /// All playable scenarios, for the selection menu.
-    static let scenarios: [Scenario] = [houseScenario(), townScenario(), riverboatScenario(), fortPulaskiScenario(), roppongiScenario(), fujiScenario()]
+    static let scenarios: [Scenario] = [houseScenario(), townScenario(), riverboatScenario(), fortPulaskiScenario(), roppongiScenario(), fujiScenario(), greenwichScenario()]
 
     convenience init() { self.init(scenario: Game.houseScenario()) }
 
@@ -250,12 +253,14 @@ final class Game {
         let rest = Array(tokens.dropFirst())
         switch verb {
         case "look", "l":
-            if rest.first == "at", rest.count > 1 {
-                examine(Array(rest.dropFirst()))
+            // "at" is stripped as filler, so any words after LOOK name a
+            // thing to examine ("look at the bell" arrives as "look bell").
+            if rest.isEmpty {
+                describeCurrentRoom(force: true)
             } else if rest.contains("around") || rest.contains("here") {
                 lookAround()
             } else {
-                describeCurrentRoom(force: true)
+                examine(rest)
             }
         case "what", "survey":
             lookAround()
@@ -273,7 +278,7 @@ final class Game {
             setOpen(rest, open: true)
         case "close", "shut":
             setOpen(rest, open: false)
-        case "move", "push", "pull", "slide", "ring", "throw", "play":
+        case "move", "push", "pull", "slide", "ring", "throw", "play", "stand", "straddle", "drink", "sip":
             moveObject(rest)
         case "turn":
             turn(rest)
@@ -559,6 +564,7 @@ final class Game {
             emit("You don't see that here.")
             return
         }
+        if scenario.onExamine?(self, id) == true { return }
         var text = item.description
         if item.isContainer {
             if item.isOpen {
@@ -2188,6 +2194,225 @@ extension Game {
         )
     }
 
+    /// Greenwich Park: a London afternoon by the meridian. Step off the
+    /// Thames Clipper at Greenwich Pier, walk beneath the Cutty Sark, meet
+    /// Nelson's coat at the National Maritime Museum, climb the chestnut
+    /// avenue to the Royal Observatory and straddle the Prime Meridian —
+    /// then take the bench by the Wolfe statue, where the game turns from
+    /// going to looking: spot Canary Wharf, the O2, and the London Eye from
+    /// your seat, and share your hazelnuts with a squirrel.
+    static func greenwichScenario() -> Scenario {
+        // The eight marks of a perfect Greenwich afternoon; the walk home to
+        // Blackheath, with all of them done, is the win.
+        let stops = ["sawCutty", "sawMuseum", "straddled",
+                     "spotCanary", "spotO2", "spotEye", "fedSquirrel", "hadBeer"]
+        let finishIfDone: (Game) -> Void = { game in
+            guard stops.allSatisfy({ game.has(flag: $0) }), !game.has(flag: "readyHome") else { return }
+            game.set(flag: "readyHome")
+            game.emit("And that's the whole afternoon, done properly. Nothing left but the best part: the amble home — Blackheath is SOUTH, out across the heath.")
+        }
+        return Scenario(
+            id: "greenwich",
+            title: "Greenwich Park",
+            destination: "London",
+            blurb: "The commute-home detour: off the DLR from Canary Wharf at Cutty Sark station, under the tea clipper, past Nelson's coat, up to the Prime Meridian — then the bench above London, spotting the skyline you just left, with hazelnuts for the squirrels.",
+            banner: """
+            GREENWICH PARK
+            A London afternoon by the meridian. (c) 2026
+            Type HELP for commands. The Cutty Sark is just UP the station steps.
+            ─────────────────────────────
+            """,
+            startRoomID: "dlrStation",
+            maxScore: 60,
+            startingCoins: 12,
+            build: buildGreenwichWorld,
+            exitHidden: { game, direction in
+                // On the hill legs, UP/DOWN are synonyms of the compass exits;
+                // keep those listings to one of each. (At the DLR station and
+                // the ship, UP/DOWN are the real exits and stay visible.)
+                (direction == .up || direction == .down)
+                    && ["parkLawn", "chestnutAvenue", "observatory"].contains(game.roomID)
+            },
+            fixtureLine: { game, id in
+                guard let item = game.item(id) else { return nil }
+                if item.forSale {
+                    let name = item.name.prefix(1).uppercased() + item.name.dropFirst()
+                    return "\(name) — \(item.price) coins at the kiosk."
+                }
+                switch id {
+                case "meridian":
+                    return game.has(flag: "straddled")
+                        ? "The brass meridian line runs across the courtyard, already conquered — one foot per hemisphere."
+                        : "A brass line runs across the courtyard: the Prime Meridian of the world. (STRADDLE THE LINE — one foot in each hemisphere.)"
+                case "kioskLady":
+                    return "The kiosk lady keeps the teas coming and the hazelnut supply steady."
+                case "squirrel":
+                    return "A grey squirrel loiters at polite arm's length, monitoring developments."
+                default:
+                    return nil
+                }
+            },
+            onMoveObject: { game, id in
+                // DRINK BEER — but only where it belongs: on the bench.
+                if game.item(id)?.kind == "beer" {
+                    if game.roomID != "wolfeViewpoint" {
+                        game.emit("Not yet. This beer has exactly one correct location — the bench at the top of the park. It's the law of the hill.")
+                        return true
+                    }
+                    if game.has(flag: "hadBeer") {
+                        game.emit("The empty can is already crackling contentedly beside you on the bench.")
+                        return true
+                    }
+                    game.consumeFromInventory(id)
+                    game.set(flag: "hadBeer")
+                    game.award(10, "You crack the can — that first pssht doing exactly what it always does — and settle back on the bench with the whole city arranged below. Cold beer, warm light, squirrels auditing the area, London politely getting on without you. Whoever invented this routine deserves a statue next to Wolfe's.")
+                    finishIfDone(game)
+                    return true
+                }
+                guard id == "meridian" else { return false }
+                if game.has(flag: "straddled") {
+                    game.emit("You've already had your moment astride the world — though nobody would blame you for a second one. The queue behind you might.")
+                    return true
+                }
+                game.set(flag: "straddled")
+                game.award(15, "You plant one foot on each side of the brass strip — east in one hemisphere, west in the other, longitude zero running exactly between your shoes. And as if the Observatory approves, the red Time Ball on Flamsteed House climbs its mast and, at 13:00 precisely — Greenwich Mean Time, measured from the very line between your feet — drops. Since 1833, ships on the Thames have set their clocks by that fall. Today it might as well be saluting you.")
+                finishIfDone(game)
+                return true
+            },
+            onGive: { game, gift, recipient in
+                guard recipient == "squirrel" else { return false }
+                if game.has(flag: "fedSquirrel") {
+                    game.emit("The squirrel pats its cheeks — full — and performs a slow cartwheel of gratitude along the railing instead.")
+                    return true
+                }
+                guard game.item(gift)?.kind == "nut" else {
+                    game.emit("The squirrel inspects the offering from a safe distance, decides you can do better, and returns to the branch. (The park kiosk sells hazelnuts.)")
+                    return true
+                }
+                game.consumeFromInventory(gift)
+                game.set(flag: "fedSquirrel")
+                game.award(10, "You hold a hazelnut out on your palm and keep very still. The grey squirrel flows down the oak in three quick spirals, pauses, judges you thoroughly — and takes it from your fingers, sitting up to eat it right there on the bench arm, tail curled like a question mark. Two of its colleagues immediately begin a formal audit of your pockets. You have been accepted.")
+                finishIfDone(game)
+                return true
+            },
+            onTalk: { game, id in
+                switch id {
+                case "squirrel":
+                    game.emit(game.has(flag: "fedSquirrel")
+                        ? "The squirrel chirrs at you in a companionable way and stays within arm's reach — you're one of the good ones now."
+                        : "The squirrel fixes you with one bright eye and chitters something that is unmistakably a question about snacks. (The kiosk down the hill sells hazelnuts.)")
+                    return true
+                case "kioskLady":
+                    game.emit("\"Lovely afternoon for it,\" the kiosk lady says, restocking the hazelnuts. \"Nuts are for the squirrels up by the statue — they'll take them right off your hand if you keep still. Ice cream's for you. And if you haven't stood on the line yet, do — everyone pretends they're too grown-up for it, and nobody is.\"")
+                    return true
+                default:
+                    return false
+                }
+            },
+            onExamine: { game, id in
+                // The bench view: looking IS the sightseeing. Each landmark
+                // spotted from the Wolfe viewpoint is scored once.
+                func spot(_ flag: String, _ points: Int, _ text: String) -> Bool {
+                    if game.has(flag: flag) {
+                        game.emit(text)
+                    } else {
+                        game.set(flag: flag)
+                        game.award(points, text)
+                        finishIfDone(game)
+                    }
+                    return true
+                }
+                switch id {
+                case "canaryWharf":
+                    return spot("spotCanary", 5, "Canary Wharf, straight ahead across the river bend — the cluster of glass towers you rode out of an hour ago, One Canada Square's pyramid roof winking in the light, the DLR threading between the buildings like a toy. From up here the whole money-machine looks quiet, like a model of itself, and the day's work seems a very long way below. The squirrels are unimpressed, which feels correct.")
+                case "o2":
+                    return spot("spotO2", 5, "Off to the right on its peninsula sits the O2 — the old Millennium Dome — a great white tent pinned down by twelve yellow masts, one for each month, looking exactly like a spaceship that decided to stay. You can just make out the little figures of people walking over its roof.")
+                case "londonEye":
+                    return spot("spotEye", 5, "Far off to the left, past the towers of the City, the London Eye turns so slowly you have to trust it rather than see it — a pale wheel standing over the river, with St Paul's dome holding its ground among the glass nearby. All of London, in one patient look.")
+                default:
+                    return false
+                }
+            },
+            onEnterRoom: { game, roomID in
+                func award(_ flag: String, _ points: Int, _ note: String) {
+                    guard !game.has(flag: flag) else { return }
+                    game.set(flag: flag)
+                    game.award(points, note)
+                    finishIfDone(game)
+                }
+                switch roomID {
+                case "cuttySark":
+                    award("sawCutty", 5, "There she is — the Cutty Sark, the fastest tea clipper of her age, raised on glass above her dry dock so you can walk clean underneath a hull that once did Shanghai to London with the year's first tea. Her name is pure Robert Burns: the witch Nannie in her 'cutty sark' — her short shirt — who tore the tail from Tam o' Shanter's horse, and the gilded figurehead still brandishes that horsehair. Under the copper-sheathed hull, the whole ship balances above you like held breath.")
+                case "maritimeMuseum":
+                    award("sawMuseum", 5, "The National Maritime Museum — the largest of its kind in the world, and free as the wind. In a quiet case hangs the exhibit that stops everyone: Nelson's own Trafalgar coat, the bullet hole from the fatal musket ball still in the left shoulder, the stain never cleaned. Around it, a navy's worth of figureheads, ship models, and gilded barges. (READ the EXHIBIT for the story.)")
+                case "wolfeViewpoint":
+                    if !game.has(flag: "sawViewpoint") {
+                        game.set(flag: "sawViewpoint")
+                        game.emit("You come out at the statue of General Wolfe and the ground simply stops — all of London opens below the hill. This is a place for sitting, not walking: take the BENCH, and LOOK at things — CANARY WHARF, the O2, the LONDON EYE. The squirrels will find you, and the walk home to Blackheath waits SOUTH across the heath.")
+                    }
+                case "blackheath":
+                    if stops.allSatisfy({ game.has(flag: $0) }), !game.isWon {
+                        game.win("You finish the last of the light on the long diagonal across the park, give the squirrel sentry at the gate a nod of colleagues parting, and come out onto the heath — wide, flat, and gold, a kite or two up, the village lights coming on across the grass. Home to Blackheath, the long way round: the ship, the coat, the line, the view, the squirrel, the beer on the bench. The perfect commute, door to door. Kettle on.")
+                    } else if !game.isWon {
+                        game.emit("The heath opens ahead and home is just across it — but the afternoon isn't finished with you yet. The park, the bench, and the rest of the ritual are back NORTH. (HINT knows what's left.)")
+                    }
+                default:
+                    break
+                }
+            },
+            hintStage: { game in
+                if !game.has(flag: "sawCutty") {
+                    return (key: "cutty", clues: [
+                        "The whole point of getting off at this stop is waiting at the top of the steps.",
+                        "Go UP from the DLR station — the Cutty Sark is right outside.",
+                    ])
+                }
+                if !game.has(flag: "sawMuseum") {
+                    return (key: "museum", clues: [
+                        "The museum is on the way to the park — and it's free.",
+                        "Go SOUTH from the Cutty Sark to the National Maritime Museum.",
+                    ])
+                }
+                if !game.has(flag: "straddled") {
+                    return (key: "line", clues: [
+                        "The hill is worth the climb — the whole world is measured from the top.",
+                        "Go SOUTH through the park and UP the chestnut avenue to the Royal Observatory, then STRADDLE THE LINE — one foot in each hemisphere.",
+                    ])
+                }
+                var left: [String] = []
+                if !game.has(flag: "spotCanary") { left.append("CANARY WHARF") }
+                if !game.has(flag: "spotO2") { left.append("the O2") }
+                if !game.has(flag: "spotEye") { left.append("the LONDON EYE") }
+                if !left.isEmpty {
+                    return (key: "view:" + left.joined(separator: "|"), clues: [
+                        "The best part of Greenwich is done sitting down.",
+                        "The viewpoint is EAST of the Observatory. SIT on the bench and LOOK AT \(left.joined(separator: ", then ")).",
+                    ])
+                }
+                if !game.has(flag: "fedSquirrel") {
+                    return (key: "squirrel", clues: [
+                        "You have company on that bench, and it has expectations.",
+                        game.inventoryKinds().contains("nut")
+                            ? "GIVE a NUT TO the SQUIRREL — hold still and it will take it from your hand."
+                            : "BUY NUTS at the park kiosk (back down the hill), then GIVE a NUT TO the SQUIRREL at the bench.",
+                    ])
+                }
+                if !game.has(flag: "hadBeer") {
+                    return (key: "beer", clues: [
+                        "One bench tradition remains to be honoured.",
+                        game.inventoryKinds().contains("beer")
+                            ? "DRINK the BEER — you're in exactly the right place."
+                            : "BUY a BEER at the park kiosk, carry it up the hill, and DRINK it on the bench.",
+                    ])
+                }
+                return (key: "home", clues: [
+                    "The heath is calling, and the kettle is at the far end of it.",
+                    "Go SOUTH from the viewpoint, out across the heath, home to Blackheath.",
+                ])
+            }
+        )
+    }
+
     // Small mutators the scenario hooks lean on.
     fileprivate func revealItem(_ id: String, inRoom roomID: String) {
         rooms[roomID]?.items.append(id)
@@ -2871,6 +3096,139 @@ private func buildRoppongiWorld() -> (rooms: [String: Room], items: [String: Ite
              description: "The little bank of fare-adjustment machines beside the blocked gate. No ticket, no exit — but the orange 精算 machine will sort you out. PUSH it to settle the fare, then step back OUT to the gate.",
              exits: [.outside: "homeStation"],
              items: ["fareMachine"]))
+
+    return (rooms, items)
+}
+
+private func buildGreenwichWorld() -> (rooms: [String: Room], items: [String: Item]) {
+    var items: [String: Item] = [:]
+    func add(_ item: Item) { items[item.id] = item }
+
+    // The DLR from Canary Wharf.
+    add(Item(id: "dlrTrain", name: "DLR train", nouns: ["dlr", "train", "carriage"],
+             description: "The driverless DLR train that carried you from Canary Wharf, resting at the platform. No driver's cab — which means the front seat is the best seat in London transport, and everyone aboard quietly knows it.", isFixture: true))
+    add(Item(id: "dlrSign", name: "station sign", nouns: ["sign", "board"],
+             description: "The station roundel, patient as ever.",
+             readText: "\"CUTTY SARK — for Maritime Greenwich. Way out for: Cutty Sark · Greenwich Market · National Maritime Museum · Royal Observatory & Greenwich Park.\" The whole afternoon, listed in order.",
+             isFixture: true))
+
+    // The Cutty Sark.
+    add(Item(id: "clipper", name: "Cutty Sark", nouns: ["ship", "clipper", "sark", "cutty", "hull"],
+             description: "The Cutty Sark, launched 1869 — the fastest tea clipper ever built, raised on a ring of glass above her dry dock. Her copper-sheathed hull hangs overhead close enough to touch, still shaped like the sea is missing.", isFixture: true))
+    add(Item(id: "nannie", name: "Nannie figurehead", nouns: ["figurehead", "nannie", "witch"],
+             description: "Nannie herself at the bow — the witch from Burns' Tam o' Shanter, in her short 'cutty sark', arm outstretched with the grey horsehair she tore from Tam's mare as he escaped. A ship named after a punchline, and the fastest of her age at that.",
+             readText: "The plaque gives you the Burns: Tam o' Shanter, fleeing the witches at midnight, is saved because a witch can't cross running water — but the young witch Nannie, in her 'cutty sark' (her short shift), snatches the tail from his horse at the bridge. Ship, name, and figurehead: one good story, sailing since 1869.",
+             isFixture: true))
+
+    // The National Maritime Museum.
+    add(Item(id: "nelsonCoat", name: "Nelson's coat", nouns: ["coat", "nelson", "exhibit", "uniform"],
+             description: "Vice-Admiral Nelson's undress coat, worn at Trafalgar, in a quiet case with the light kept low. The musket-ball hole is in the left shoulder. Nobody talks loudly in front of it.",
+             readText: "\"UNDRESS COAT, VICE-ADMIRAL HORATIO NELSON — worn at the Battle of Trafalgar, 21 October 1805. The hole of the fatal musket ball is visible in the left shoulder; the medals are the replicas he wore at sea. He asked that his family be looked after. The nation kept the coat instead.\"",
+             isFixture: true))
+    add(Item(id: "shipModels", name: "ship models", nouns: ["models", "model", "ships", "cases"],
+             description: "Case after case of ship models rigged with thread finer than hair — three centuries of the sea, at 1:48 scale, each one somebody's ten thousand patient hours.", isFixture: true))
+    add(Item(id: "figureheads", name: "figureheads", nouns: ["figureheads", "figures", "carvings"],
+             description: "A wall of retired figureheads gazing over your head toward horizons that stopped existing a century ago — lions, ladies, admirals, and one alarmingly cheerful unicorn.", isFixture: true))
+
+    // The park lawn and kiosk.
+    add(Item(id: "greenwichMap", name: "park map", nouns: ["map", "guide", "leaflet"],
+             description: "A free folding map of Greenwich Park from the kiosk rack, soft at the creases.",
+             isTakeable: true,
+             readText: """
+             "GREENWICH PARK — oldest of the Royal Parks, enclosed 1433.
+               • The Royal Observatory & Prime Meridian: UP the chestnut avenue, at the top of the hill.
+               • The Wolfe statue viewpoint: EAST of the Observatory — the famous view, and the famous benches.
+               • Kiosk: hazelnuts (the squirrels take them from your hand), ice cream, cold drinks.
+               • Blackheath & the village: SOUTH across the heath from the top of the park.
+             Lost? GO TO <place> retraces your steps. The deer live in the Wilderness — look, don't chase."
+             """))
+    add(Item(id: "nuts", name: "bag of hazelnuts", nouns: ["nuts", "nut", "hazelnuts", "hazelnut", "bag"],
+             description: "A paper bag of hazelnuts, sold for one purpose only, and the squirrels know the sound it makes.",
+             isTakeable: true, isFixture: true, forSale: true, price: 4, kind: "nut"))
+    add(Item(id: "iceCream", name: "99 with a Flake", nouns: ["ice", "cream", "99", "flake", "cone"],
+             description: "A whippy 99 with a Flake at a jaunty angle — the official ice cream of British childhood, and of anyone sensible since.",
+             isTakeable: true, isFixture: true, forSale: true, price: 3, kind: "icecream"))
+    add(Item(id: "beer", name: "cold beer", nouns: ["beer", "can", "lager"],
+             description: "A properly cold can of lager, beaded with condensation. It has an appointment with a bench at the top of the hill.",
+             isTakeable: true, isFixture: true, forSale: true, price: 4, kind: "beer"))
+    add(Item(id: "kioskLady", name: "kiosk lady", nouns: ["lady", "keeper", "vendor", "kiosk"],
+             description: "The kiosk lady, who has watched twenty years of afternoons head up that hill and knows exactly what each of them needs.",
+             isFixture: true, isCreature: true))
+
+    // The avenue and the hilltop.
+    add(Item(id: "chestnuts", name: "sweet chestnuts", nouns: ["chestnuts", "chestnut", "trees", "avenue"],
+             description: "Ancient sweet chestnuts line the climb, planted in the 1660s and grown into vast twisted characters, each with a personality and most with a squirrel in residence.", isFixture: true))
+    add(Item(id: "squirrel", name: "grey squirrel", nouns: ["squirrel", "squirrels"],
+             description: "A grey squirrel — and then, once you look, four more: chasing in spirals up a chestnut trunk, leaping gaps that shouldn't be leapable, pausing upside down to check whether you've turned out to be the kind of person who carries hazelnuts.",
+             isFixture: true, isCreature: true))
+    add(Item(id: "meridian", name: "Prime Meridian line", nouns: ["line", "meridian", "strip", "prime"],
+             description: "The Prime Meridian of the World: a brass strip set in the courtyard stones, longitude 0° 0' 0\", the line every map and clock on earth has answered to since 1884. East on one side, west on the other, and a queue of people grinning at their own feet.", isFixture: true))
+    add(Item(id: "timeBall", name: "Time Ball", nouns: ["ball", "timeball"],
+             description: "The bright red Time Ball on the roof of Flamsteed House. Every day since 1833 it climbs its mast at 12:55 and drops at 13:00 exactly — one of the first public time signals in the world, still keeping its appointment.", isFixture: true))
+    add(Item(id: "gateClock", name: "Shepherd Gate Clock", nouns: ["clock", "shepherd", "gate"],
+             description: "The Shepherd Gate Clock, set into the Observatory wall since 1852 — a 24-hour dial, and one of the first clocks ever to show Greenwich Mean Time directly to the public.",
+             readText: "The dial reads out the true time of the meridian a few steps away. For a century, people set their pocket watches here — and a certain Ruth Belville then carried the time itself into London, selling accurate seconds door to door from a chronometer named Arnold.",
+             isFixture: true))
+    add(Item(id: "flamsteed", name: "Flamsteed House", nouns: ["flamsteed", "house", "observatory", "dome"],
+             description: "Flamsteed House, Wren's little observatory of 1675, its onion dome and warm brick presiding over the courtyard — built, said the King, 'for the perfecting of navigation and astronomy', and still doing quiet business in both.", isFixture: true))
+
+    // The viewpoint — where the going stops and the looking starts.
+    add(Item(id: "wolfeStatue", name: "Wolfe statue", nouns: ["statue", "wolfe", "general"],
+             description: "General James Wolfe in bronze, gazing out over the city — a Greenwich man, victor and casualty of Quebec in 1759, given the best view in London for keeps.",
+             readText: "\"MAJOR-GENERAL JAMES WOLFE, 1727–1759 — victor of Quebec, resident of Greenwich, buried in St Alfege's below. This statue, a gift of the Canadian people, 1930.\" The plinth still carries shrapnel scars from a wartime bomb — he held his post.",
+             isFixture: true))
+    add(Item(id: "bench", name: "bench", nouns: ["bench", "seat"],
+             description: "A well-worn bench at the railing, angled precisely at London. Whoever placed it knew exactly what they were doing.",
+             readText: "You sit, and the afternoon reorganises itself around the view: the Queen's House square and white directly below, the river doubling around the Isle of Dogs, and the whole skyline waiting to be LOOKED at — CANARY WHARF ahead, the O2 on its peninsula, the LONDON EYE far off to the left. Squirrels conduct their business along the railing. This bench is the entire point of the hill.",
+             isFixture: true, kind: "seat"))
+    add(Item(id: "queensHouse", name: "Queen's House", nouns: ["queen", "queens", "house", "colonnade"],
+             description: "The Queen's House directly below — Inigo Jones's perfect white cube of 1616, the first classical building in England, holding the middle of the view like a full stop.", isFixture: true))
+    add(Item(id: "canaryWharf", name: "Canary Wharf", nouns: ["canary", "wharf", "towers", "skyline"],
+             description: "The glass towers across the river — best appreciated from the bench.", isFixture: true))
+    add(Item(id: "o2", name: "the O2", nouns: ["o2", "dome", "millennium"],
+             description: "The white dome on the peninsula — best appreciated from the bench.", isFixture: true))
+    add(Item(id: "londonEye", name: "London Eye", nouns: ["eye", "wheel", "london"],
+             description: "The pale wheel far upriver — best appreciated from the bench.", isFixture: true))
+
+    // Blackheath — home.
+    add(Item(id: "heath", name: "the heath", nouns: ["heath", "grass", "green"],
+             description: "Blackheath: wide, flat, and open to the whole sky, kites permanently aloft, the village church spire rising at the far edge. Home ground.", isFixture: true))
+
+    var rooms: [String: Room] = [:]
+    func add(_ room: Room) { rooms[room.id] = room }
+
+    add(Room(id: "dlrStation", title: "Cutty Sark DLR Station",
+             description: "The DLR from Canary Wharf sighs to a stop and lets you out at Cutty Sark station — the commute interrupted in the best possible way. The driverless train rests at the platform behind you; the way out is UP the steps, where a tea clipper is waiting.",
+             exits: [.up: "cuttySark"],
+             items: ["dlrTrain", "dlrSign"]))
+    add(Room(id: "cuttySark", title: "The Cutty Sark",
+             description: "You come up the station steps and there she is: the Cutty Sark, masts and rigging against the sky, her hull raised on glass so the ship rides above her dry dock. Nannie the figurehead reaches from the bow (READ her story). The National Maritime Museum is SOUTH; the DLR is back DOWN.",
+             exits: [.down: "dlrStation", .south: "maritimeMuseum"],
+             items: ["clipper", "nannie"]))
+    add(Room(id: "maritimeMuseum", title: "National Maritime Museum",
+             description: "The great glass court of the National Maritime Museum, free to all comers: figureheads on the walls, ship models by the fleet, and in a quiet case, Nelson's Trafalgar coat (READ the EXHIBIT). Greenwich Park begins SOUTH of the doors; the Cutty Sark is back NORTH.",
+             exits: [.north: "cuttySark", .south: "parkLawn"],
+             items: ["nelsonCoat", "shipModels", "figureheads"]))
+    add(Room(id: "parkLawn", title: "Greenwich Park — The Lawn",
+             description: "Through the gates and into the oldest Royal Park in London: broad lawns, dog-walkers, and the hill rising ahead. The kiosk by the path sells hazelnuts, ice cream, and cold beer — provisions for the summit — and keeps free park maps in a rack (TAKE one). The chestnut avenue climbs SOUTH; the museum is back NORTH.",
+             exits: [.north: "maritimeMuseum", .south: "chestnutAvenue", .up: "chestnutAvenue"],
+             items: ["kioskLady", "greenwichMap", "nuts", "iceCream", "beer"]))
+    add(Room(id: "chestnutAvenue", title: "The Chestnut Avenue",
+             description: "The path climbs the hill between ancient sweet chestnuts, planted for Charles II and now enormous, twisted, and thoroughly occupied by squirrels. The Observatory crowns the rise ahead — keep climbing SOUTH; the lawn is back NORTH.",
+             exits: [.north: "parkLawn", .down: "parkLawn", .south: "observatory", .up: "observatory"],
+             items: ["chestnuts", "squirrel"]))
+    add(Room(id: "observatory", title: "Royal Observatory — The Meridian Courtyard",
+             description: "The courtyard of the Royal Observatory, on the crown of the hill: Flamsteed House with its red Time Ball, the Shepherd Gate Clock in the wall (READ it), and set into the stones, the brass Prime Meridian line itself. The famous viewpoint and its benches are just EAST; the avenue descends back NORTH.",
+             exits: [.north: "chestnutAvenue", .down: "chestnutAvenue", .east: "wolfeViewpoint"],
+             items: ["meridian", "timeBall", "gateClock", "flamsteed"]))
+    add(Room(id: "wolfeViewpoint", title: "The Wolfe Statue Viewpoint",
+             description: "The terrace by General Wolfe's statue, at the edge of the hill, where London lays itself out below: the Queen's House, the river, and the skyline beyond. A bench waits at the railing (SIT — then LOOK at CANARY WHARF, the O2, the LONDON EYE), squirrels patrol the railing, and the path home to Blackheath runs SOUTH across the park. The Observatory courtyard is back WEST.",
+             exits: [.west: "observatory", .south: "blackheath"],
+             items: ["wolfeStatue", "bench", "squirrel", "queensHouse", "canaryWharf", "o2", "londonEye"]))
+    add(Room(id: "blackheath", title: "Blackheath",
+             description: "Out through the top gate of the park and onto Blackheath — wide, flat, and open to the sky, kites up, the village lights ahead across the grass. Home is at the far side of the green. The park (and the bench) are back NORTH.",
+             exits: [.north: "wolfeViewpoint"],
+             items: ["heath"]))
 
     return (rooms, items)
 }

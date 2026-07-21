@@ -163,6 +163,7 @@ struct MenuView: View {
         case "Explore":  return "bg_west_of_house_landscape"
         case "Savannah": return "bg_pulaski_terreplein_landscape"
         case "Japan":    return "bg_fuji_summit_landscape"
+        case "London":   return "bg_greenwich_viewpoint_landscape"
         default:         return nil
         }
     }
@@ -496,6 +497,15 @@ struct GameView: View {
         case "postOffice":    return "bg_fuji_post_office"
         case "craterRim":     return "bg_fuji_crater_rim"
         case "kengamine":     return "bg_fuji_kengamine"
+        // Greenwich Park — the commute-home detour, from the DLR to Blackheath.
+        case "dlrStation":     return "bg_greenwich_dlr_station"
+        case "cuttySark":      return "bg_greenwich_cutty_sark"
+        case "maritimeMuseum": return "bg_greenwich_museum"
+        case "parkLawn":       return "bg_greenwich_park_lawn"
+        case "chestnutAvenue": return "bg_greenwich_avenue"
+        case "observatory":    return "bg_greenwich_observatory"
+        case "wolfeViewpoint": return "bg_greenwich_viewpoint"
+        case "blackheath":     return "bg_greenwich_blackheath"
         default:            return nil
         }
     }

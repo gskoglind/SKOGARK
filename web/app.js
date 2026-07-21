@@ -117,6 +117,15 @@
         postOffice:       "bg_fuji_post_office",
         craterRim:        "bg_fuji_crater_rim",
         kengamine:        "bg_fuji_kengamine",
+        // Greenwich Park — the commute-home detour, from the DLR to Blackheath.
+        dlrStation:       "bg_greenwich_dlr_station",
+        cuttySark:        "bg_greenwich_cutty_sark",
+        maritimeMuseum:   "bg_greenwich_museum",
+        parkLawn:         "bg_greenwich_park_lawn",
+        chestnutAvenue:   "bg_greenwich_avenue",
+        observatory:      "bg_greenwich_observatory",
+        wolfeViewpoint:   "bg_greenwich_viewpoint",
+        blackheath:       "bg_greenwich_blackheath",
         // livingRoom, cellar, roppongiStation, and Fuji's eighthHut /
         // ninthStation / summit are state-dependent — see backgroundBase().
     };
@@ -525,6 +534,7 @@
         Explore:  "bg_west_of_house_landscape",
         Savannah: "bg_pulaski_terreplein_landscape",
         Japan:    "bg_fuji_summit_landscape",
+        London:   "bg_greenwich_viewpoint_landscape",
     };
     const taglineEl = document.querySelector("#menu .tagline");
 
