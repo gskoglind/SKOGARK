@@ -73,6 +73,7 @@ struct MenuView: View {
                             scenarioCard(scenario)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("scenario:\(scenario.id)")
                     }
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) { self.destination = nil }
@@ -91,6 +92,7 @@ struct MenuView: View {
                             destinationCard(name)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("destination:\(name)")
                     }
                 }
             }
@@ -131,6 +133,10 @@ struct MenuView: View {
         }
         .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        // The scaledToFill art overflows the card frame; .clipShape trims the
+        // drawing but NOT hit testing, so without this the invisible overflow
+        // swallows taps meant for the neighbouring cards.
+        .contentShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .strokeBorder(Color(white: 0.25), lineWidth: 1)
@@ -688,6 +694,7 @@ struct GameView: View {
                             .overlay(Capsule().strokeBorder(chipColor(chip.style).opacity(0.35), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("chip:\(chip.cmd)")
                 }
             }
             .padding(.horizontal, 12)
