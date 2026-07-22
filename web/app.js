@@ -725,6 +725,10 @@
         jukebox:       { label: "\u{1F3B5} Jukebox",        cmd: "play jukebox" },
         fareMachine:   { label: "Settle the fare",          cmd: "push machine" },
         meridian:      { label: "Straddle the line",        cmd: "straddle line" },
+        rug:           { label: "Move the rug",             cmd: "move rug" },
+        cannonCruise:    { label: "⚓ Board the Cannon Cruise",    cmd: "board cannon" },
+        afternoonCruise: { label: "⚓ Board the Afternoon Cruise", cmd: "board afternoon" },
+        sunsetCruise:    { label: "⚓ Board the Sunset Cruise",    cmd: "board sunset" },
     };
     // Carried items with a natural one-tap verb, keyed by item KIND — bought
     // copies get minted ids like "beer#0", so ids won't match here.
@@ -789,6 +793,27 @@
                 if (item.readText) {
                     frag.appendChild(makeChip("Read " + item.name, "read " + noun, "look"));
                 }
+                // Doors, windows, and containers — required in the house.
+                if (item.isOpenable) {
+                    frag.appendChild(makeChip(
+                        (item.isOpen ? "Close " : "Open ") + item.name,
+                        (item.isOpen ? "close " : "open ") + noun, "do"));
+                }
+            }
+            // Put a carried item into any open container in the room
+            // (the trophy case, the summit postbox); the engine validates.
+            for (const contID of room.items) {
+                const cont = game.item(contID);
+                if (!cont || !cont.isContainer || !cont.isOpen) continue;
+                const cnoun = (cont.nouns && cont.nouns[0]) || cont.name;
+                for (const carriedID of game.inventory) {
+                    const carried = game.item(carriedID);
+                    if (!carried) continue;
+                    const gnoun = (carried.nouns && carried.nouns[0]) || carried.name;
+                    frag.appendChild(makeChip(
+                        "Put " + carried.name + " → " + cont.name,
+                        "put " + gnoun + " in " + cnoun, "give"));
+                }
             }
             // Give any carried item to any creature present; the engine validates.
             const creatures = room.items
@@ -814,6 +839,17 @@
             const carried = game.item(id);
             const special = carried && carried.kind && INV_SPECIAL[carried.kind];
             if (special) frag.appendChild(makeChip(special.label, special.cmd, "do"));
+        }
+        // Light sources, carried or in the room — the cellar and the ninth
+        // station are tap-only climbs too. (Shown even in the dark: turning
+        // the lamp on is exactly what a dark room needs.)
+        const lightIDs = game.inventory.concat(room ? room.items : []);
+        for (const id of lightIDs) {
+            const it = game.item(id);
+            if (!it || !it.isLightSource) continue;
+            frag.appendChild(makeChip(
+                (it.isLit ? "Turn off " : "\u{1F526} Turn on ") + it.name,
+                "turn " + (it.isLit ? "off" : "on"), "do"));
         }
         if (sawSeat) frag.appendChild(makeChip("Sit", "sit", "do"));
 
