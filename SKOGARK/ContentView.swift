@@ -164,7 +164,7 @@ struct MenuView: View {
         case "Savannah": return "bg_pulaski_terreplein_landscape"
         case "Japan":    return "bg_fuji_summit_landscape"
         case "London":   return "bg_greenwich_viewpoint_landscape"
-        case "Sydney":   return "bg_sydney_manly_deck_landscape"
+        case "Sydney":   return "bg_sydney_gardens_landscape"
         default:         return nil
         }
     }

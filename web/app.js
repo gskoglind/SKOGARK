@@ -554,7 +554,7 @@
         Savannah: "bg_pulaski_terreplein_landscape",
         Japan:    "bg_fuji_summit_landscape",
         London:   "bg_greenwich_viewpoint_landscape",
-        Sydney:   "bg_sydney_manly_deck_landscape",
+        Sydney:   "bg_sydney_gardens_landscape",
     };
     const taglineEl = document.querySelector("#menu .tagline");
 
