@@ -192,6 +192,10 @@ struct GameView: View {
     @State private var flashOpacity: Double = 0
     @State private var flashTask: Task<Void, Never>?
 
+    // Compact widths (iPhone portrait) give the artwork less of the screen so
+    // the transcript and the chip row keep breathing room.
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+
     var body: some View {
         VStack(spacing: 0) {
             titleBar
@@ -299,7 +303,9 @@ struct GameView: View {
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
         }
-        .containerRelativeFrame(.vertical) { length, _ in length * 0.60 }
+        .containerRelativeFrame(.vertical) { [hSizeClass] length, _ in
+            length * (hSizeClass == .compact ? 0.42 : 0.60)
+        }
         .overlay(alignment: .bottomTrailing) { catSprite }
         .overlay(alignment: .top) { locationFlash }
         // The pane is purely decorative, and the scaledToFill artwork overflows
@@ -640,8 +646,8 @@ struct GameView: View {
                         Text(chip.label)
                             .font(.system(.footnote, design: .monospaced))
                             .foregroundStyle(chipColor(chip.style))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, 14)
+                            .frame(minHeight: 44)   // Apple's minimum touch target
                             .background(Color(white: 0.11), in: Capsule())
                             .overlay(Capsule().strokeBorder(chipColor(chip.style).opacity(0.35), lineWidth: 1))
                     }
