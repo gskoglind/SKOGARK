@@ -473,3 +473,58 @@ button[type="submit"]:disabled {
 }
 
 #catSprite.visible { opacity: 1; }
+
+/* ---- Tap-action chips (a hybrid layer over the parser) ----
+   A horizontally scrollable row of one-tap commands, built from the current
+   room state each turn. Typing still works exactly as before. */
+
+#actionBar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    padding: 8px 12px;
+    border-top: 1px solid #222;
+    background: rgba(0, 0, 0, 0.45);
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+}
+
+#actionBar:empty { display: none; }
+
+/* Hide the scrollbar on WebKit for a cleaner chip row. */
+#actionBar::-webkit-scrollbar { height: 0; }
+
+.chip {
+    flex: 0 0 auto;
+    min-height: 40px;
+    background: #1b1b1b;
+    border: 1px solid #3a3a3a;
+    border-radius: 999px;
+    color: #e6e6e6;
+    font: inherit;
+    font-size: 14px;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.chip:hover,
+.chip:focus-visible {
+    background: #262626;
+    border-color: #4ade80;
+    outline: none;
+}
+
+.chip:active { background: #303030; }
+
+/* Movement chips lead with the destination and read in the game's accent. */
+.chip.move { color: #4ade80; border-color: #2f7a4a; }
+
+/* Give chips get a warm tint so they read as a deliberate hand-off. */
+.chip.give { color: #f6c177; border-color: #6b5326; }
+
+/* Utility chips (Look / Items / Play again) sit quieter at the end. */
+.chip.util { color: #9a9a9a; border-color: #2a2a2a; font-size: 13px; }

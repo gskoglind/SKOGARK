@@ -11,6 +11,7 @@
     const gameEl = document.getElementById("game");
     const scenarioList = document.getElementById("scenarioList");
     const transcriptEl = document.getElementById("transcript");
+    const actionBar = document.getElementById("actionBar");
     const form = document.getElementById("inputBar");
     const input = document.getElementById("command");
     const goButton = form.querySelector("button[type=submit]");
@@ -612,6 +613,7 @@
         render();
         updateScene();
         updateButton();
+        renderActions();
         input.focus();
     }
 
@@ -623,6 +625,7 @@
         closeShips();
         closeCams();
         clearScene();
+        if (actionBar) actionBar.textContent = "";
     }
 
     // ---- Scene (background art, arrival card, cat sprite) ----
@@ -707,6 +710,133 @@
         goButton.disabled = input.value.trim().length === 0;
     }
 
+    // ---- Tap-action chips (hybrid layer over the parser) ----
+    // Each chip just feeds a command string into the same game.process() the
+    // text box uses. Built fresh from room state after every turn. Typing still
+    // works unchanged.
+
+    // One-tap "special" interactions keyed by item id, for verbs the parser
+    // routes to the object handler (ring / throw / play / push / straddle).
+    const SPECIAL_BY_ID = {
+        bellGeronimos: { label: "\u{1F514} Ring the bell", cmd: "ring bell" },
+        bellMogambos:  { label: "\u{1F514} Ring the bell", cmd: "ring bell" },
+        bellQuest:     { label: "\u{1F514} Ring the bell", cmd: "ring bell" },
+        dartboard:     { label: "\u{1F3AF} Throw darts",    cmd: "throw darts" },
+        jukebox:       { label: "\u{1F3B5} Jukebox",        cmd: "play jukebox" },
+        fareMachine:   { label: "Settle the fare",          cmd: "push machine" },
+        meridian:      { label: "Straddle the line",        cmd: "straddle line" },
+    };
+    // Carried items with a natural one-tap verb, keyed by item KIND — bought
+    // copies get minted ids like "beer#0", so ids won't match here.
+    const INV_SPECIAL = {
+        beer: { label: "Drink the beer", cmd: "drink beer" },
+    };
+
+    function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+    function makeChip(label, cmd, cls) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "chip" + (cls ? " " + cls : "");
+        b.textContent = label;
+        b.addEventListener("click", function () { runCommand(cmd); });
+        return b;
+    }
+
+    function renderActions() {
+        if (!actionBar) return;
+        actionBar.textContent = "";
+        if (!game) return;
+        if (game.isWon) {
+            actionBar.appendChild(makeChip("↺ Play again", "restart", "util"));
+            return;
+        }
+        const frag = document.createDocumentFragment();
+        const room = game.rooms[game.roomID];
+        const dark = !game.canSee();
+
+        // Movement — labelled with the destination room's name where known.
+        // Hidden in the dark so unlit rooms don't leak the map.
+        if (room && !dark) {
+            for (const dir of game.obviousExits()) {
+                const destID = room.exits[dir];
+                const dest = destID && game.rooms[destID];
+                const label = "→ " + (dest && dest.title ? dest.title : cap(dir));
+                frag.appendChild(makeChip(label, dir, "move"));
+            }
+        }
+
+        // Actions on what's in the room (skipped in the dark).
+        let sawSeat = false;
+        if (room && !dark) {
+            for (const id of room.items) {
+                const item = game.item(id);
+                if (!item) continue;
+                const noun = (item.nouns && item.nouns[0]) || item.name;
+                if (SPECIAL_BY_ID[id]) {
+                    frag.appendChild(makeChip(SPECIAL_BY_ID[id].label, SPECIAL_BY_ID[id].cmd, "do"));
+                } else if (item.isCreature) {
+                    frag.appendChild(makeChip("\u{1F4AC} Talk to " + item.name, "talk to " + noun, "do"));
+                } else if (item.forSale) {
+                    frag.appendChild(makeChip("Buy " + item.name + " · " + item.price, "buy " + noun, "do"));
+                } else if (item.isTakeable) {
+                    frag.appendChild(makeChip("Take " + item.name, "take " + noun, "do"));
+                } else if (item.kind === "seat") {
+                    sawSeat = true;
+                } else if (item.isFixture) {
+                    frag.appendChild(makeChip("Look at " + item.name, "examine " + noun, "look"));
+                }
+                if (item.readText) {
+                    frag.appendChild(makeChip("Read " + item.name, "read " + noun, "look"));
+                }
+            }
+            // Give any carried item to any creature present; the engine validates.
+            const creatures = room.items
+                .map(function (id) { return game.item(id); })
+                .filter(function (it) { return it && it.isCreature; });
+            if (creatures.length) {
+                for (const carriedID of game.inventory) {
+                    const carried = game.item(carriedID);
+                    if (!carried) continue;
+                    const gnoun = (carried.nouns && carried.nouns[0]) || carried.name;
+                    for (const cre of creatures) {
+                        const cnoun = (cre.nouns && cre.nouns[0]) || cre.name;
+                        frag.appendChild(makeChip(
+                            "Give " + carried.name + " → " + cre.name,
+                            "give " + gnoun + " to " + cnoun, "give"));
+                    }
+                }
+            }
+        }
+
+        // Carried one-tap verbs (e.g. drink the beer at the viewpoint).
+        for (const id of game.inventory) {
+            const carried = game.item(id);
+            const special = carried && carried.kind && INV_SPECIAL[carried.kind];
+            if (special) frag.appendChild(makeChip(special.label, special.cmd, "do"));
+        }
+        if (sawSeat) frag.appendChild(makeChip("Sit", "sit", "do"));
+
+        // Utility, quietly at the end.
+        frag.appendChild(makeChip("\u{1F441} Look", "look", "util"));
+        frag.appendChild(makeChip("\u{1F392} Items", "inventory", "util"));
+
+        actionBar.appendChild(frag);
+        actionBar.scrollLeft = 0;
+    }
+
+    // Run a command from a tapped chip: same path as the form, but we don't
+    // focus the text input, so the mobile keyboard stays down for tap-only play.
+    function runCommand(cmd) {
+        if (!game) return;
+        stopSpeaking();
+        game.process(cmd);
+        render();
+        updateScene();
+        maybeAnnounceShip();
+        renderActions();
+    }
+
     form.addEventListener("submit", function (event) {
         event.preventDefault();
         if (!game) return;
@@ -719,6 +849,7 @@
         render();
         updateScene();
         maybeAnnounceShip();
+        renderActions();
         input.focus();
     });
 
@@ -737,6 +868,7 @@
         stopSpeaking();
         game.process("hint");
         render();
+        renderActions();
         input.focus();
     });
     shipsButton.addEventListener("click", openShips);
