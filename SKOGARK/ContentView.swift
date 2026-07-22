@@ -164,6 +164,7 @@ struct MenuView: View {
         case "Savannah": return "bg_pulaski_terreplein_landscape"
         case "Japan":    return "bg_fuji_summit_landscape"
         case "London":   return "bg_greenwich_viewpoint_landscape"
+        case "Sydney":   return "bg_sydney_manly_deck_landscape"
         default:         return nil
         }
     }
@@ -499,6 +500,21 @@ struct GameView: View {
         case "postOffice":    return "bg_fuji_post_office"
         case "craterRim":     return "bg_fuji_crater_rim"
         case "kengamine":     return "bg_fuji_kengamine"
+        // Sydney Harbour — a day on the ferries from Circular Quay to The Oaks.
+        // The Quay goes gold once the sunset run has brought you back.
+        case "circularQuay":  return game.has(flag: "sunsetReturn") ? "bg_sydney_quay_dusk" : "bg_sydney_quay"
+        case "manlyDeck":     return "bg_sydney_manly_deck"
+        case "theHeads":      return "bg_sydney_heads"
+        case "manlyWharf":    return "bg_sydney_manly_wharf"
+        case "corso":         return "bg_sydney_corso"
+        case "manlyBeach":    return "bg_sydney_beach"
+        case "returnDeck":    return "bg_sydney_return_deck"
+        case "balmoralBeach": return "bg_sydney_balmoral"
+        case "darlingDeck":   return "bg_sydney_under_bridge"
+        case "starCity":      return "bg_sydney_star_city"
+        case "nbDeck":        return "bg_sydney_nb_deck"
+        case "nbWharf":       return "bg_sydney_nb_wharf"
+        case "oaksPub":       return "bg_sydney_oaks"
         // Greenwich Park — the commute-home detour, from the DLR to Blackheath.
         case "dlrStation":     return "bg_greenwich_dlr_station"
         case "cuttySark":      return "bg_greenwich_cutty_sark"
@@ -537,11 +553,20 @@ struct GameView: View {
         "cannonCruise": ("⚓ Board the Cannon Cruise", "board cannon"),
         "afternoonCruise": ("⚓ Board the Afternoon Cruise", "board afternoon"),
         "sunsetCruise": ("⚓ Board the Sunset Cruise", "board sunset"),
+        "manlyFerry": ("⛴ Board the Manly ferry", "board manly"),
+        "balmoralFerry": ("⛴ Board the Balmoral ferry", "board balmoral"),
+        "casinoFerry": ("⛴ Board the casino ferry", "board casino"),
+        "nbFerry": ("⛴ Ferry home to Neutral Bay", "board neutral"),
+        "returnFerry": ("⛴ Ferry back to the Quay", "board return"),
+        "bus": ("🚌 Bus up to The Oaks", "board bus"),
+        "crapsTable": ("🎲 Craps — $100 on the pass line", "play craps"),
     ]
     /// Carried items with a natural one-tap verb, keyed by item KIND —
     /// bought copies get minted ids like "beer#0", so ids won't match.
     private static let invSpecialByKind: [String: (label: String, cmd: String)] = [
         "beer": ("Drink the beer", "drink beer"),
+        "chips": ("🍟 Eat the fish and chips", "eat chips"),
+        "schooner": ("🍺 Drink the schooner", "drink schooner"),
     ]
 
     /// The chips for the current turn, rebuilt from room state on every

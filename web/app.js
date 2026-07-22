@@ -118,6 +118,20 @@
         postOffice:       "bg_fuji_post_office",
         craterRim:        "bg_fuji_crater_rim",
         kengamine:        "bg_fuji_kengamine",
+        // Sydney Harbour — a day on the ferries from Circular Quay to The Oaks.
+        // (circularQuay is state-dependent — see backgroundBase().)
+        manlyDeck:        "bg_sydney_manly_deck",
+        theHeads:         "bg_sydney_heads",
+        manlyWharf:       "bg_sydney_manly_wharf",
+        corso:            "bg_sydney_corso",
+        manlyBeach:       "bg_sydney_beach",
+        returnDeck:       "bg_sydney_return_deck",
+        balmoralBeach:    "bg_sydney_balmoral",
+        darlingDeck:      "bg_sydney_under_bridge",
+        starCity:         "bg_sydney_star_city",
+        nbDeck:           "bg_sydney_nb_deck",
+        nbWharf:          "bg_sydney_nb_wharf",
+        oaksPub:          "bg_sydney_oaks",
         // Greenwich Park — the commute-home detour, from the DLR to Blackheath.
         dlrStation:       "bg_greenwich_dlr_station",
         cuttySark:        "bg_greenwich_cutty_sark",
@@ -161,6 +175,10 @@
         if (roomID === "summit") {
             const bad = game && (game.has("weatherRain") || game.has("weatherCold"));
             return bad ? "bg_fuji_summit_clouded" : "bg_fuji_summit";
+        }
+        // Circular Quay goes gold once the sunset run has brought you back.
+        if (roomID === "circularQuay") {
+            return (game && game.has("sunsetReturn")) ? "bg_sydney_quay_dusk" : "bg_sydney_quay";
         }
         const base = ROOM_BACKGROUNDS[roomID] || null;
         // The 7:00 Sunset Cruise swaps in warm dusk art (no narration; a DJ
@@ -536,6 +554,7 @@
         Savannah: "bg_pulaski_terreplein_landscape",
         Japan:    "bg_fuji_summit_landscape",
         London:   "bg_greenwich_viewpoint_landscape",
+        Sydney:   "bg_sydney_manly_deck_landscape",
     };
     const taglineEl = document.querySelector("#menu .tagline");
 
@@ -729,11 +748,20 @@
         cannonCruise:    { label: "⚓ Board the Cannon Cruise",    cmd: "board cannon" },
         afternoonCruise: { label: "⚓ Board the Afternoon Cruise", cmd: "board afternoon" },
         sunsetCruise:    { label: "⚓ Board the Sunset Cruise",    cmd: "board sunset" },
+        manlyFerry:    { label: "⛴ Board the Manly ferry",       cmd: "board manly" },
+        balmoralFerry: { label: "⛴ Board the Balmoral ferry",    cmd: "board balmoral" },
+        casinoFerry:   { label: "⛴ Board the casino ferry",      cmd: "board casino" },
+        nbFerry:       { label: "⛴ Ferry home to Neutral Bay",   cmd: "board neutral" },
+        returnFerry:   { label: "⛴ Ferry back to the Quay",      cmd: "board return" },
+        bus:           { label: "🚌 Bus up to The Oaks",          cmd: "board bus" },
+        crapsTable:    { label: "🎲 Craps — $100 on the pass line", cmd: "play craps" },
     };
     // Carried items with a natural one-tap verb, keyed by item KIND — bought
     // copies get minted ids like "beer#0", so ids won't match here.
     const INV_SPECIAL = {
         beer: { label: "Drink the beer", cmd: "drink beer" },
+        chips: { label: "🍟 Eat the fish and chips", cmd: "eat chips" },
+        schooner: { label: "🍺 Drink the schooner", cmd: "drink schooner" },
     };
 
     function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }

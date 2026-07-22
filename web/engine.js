@@ -108,6 +108,8 @@ class Game {
     isCarryingKind(kind) {
         return this.inventory.some((id) => this.items[id] && this.items[id].kind === kind);
     }
+    // Adds coins to the purse (winnings, refunds).
+    earn(amount) { this.coins += amount; }
 
     // MARK: Input Handling
 
@@ -168,6 +170,7 @@ class Game {
             case "move": case "push": case "pull": case "slide":
             case "ring": case "throw": case "play":
             case "stand": case "straddle": case "drink": case "sip":
+            case "eat": case "scoff":
                 this.moveObject(rest);
                 break;
             case "turn":
@@ -2246,7 +2249,341 @@ function greenwichScenario() {
     };
 }
 
-const SCENARIOS = [houseScenario(), townScenario(), riverboatScenario(), fortPulaskiScenario(), roppongiScenario(), fujiScenario(), greenwichScenario()];
+// Sydney Harbour: a day riding the ferries from Circular Quay — past the
+// Opera House and out through the heads on the big Manly boat, under the
+// Bridge on the casino run to Star City (one legendary roll of the dice),
+// across to quiet Balmoral, fish and chips among Manly's gulls — then the
+// last ritual: the little Neutral Bay ferry, the bus up the hill, and a
+// schooner under the great oak at The Oaks. The schooner is the win.
+function sydneyScenario() {
+    // The eleven marks of a proper Sydney day; the little ferry home only
+    // takes you once they're all done, and the schooner at The Oaks — up the
+    // hill by bus from the Neutral Bay wharf — is the win.
+    const stops = ["boardedManly", "spotOpera", "spotBridge", "spotDenison",
+        "crossedHeads", "sawBeach", "ateChips", "sunsetReturn",
+        "sawBalmoral", "underBridge", "playedCraps"];
+    const dayDone = (game) => stops.every((f) => game.has(f));
+    return {
+        id: "sydney",
+        title: "Sydney Harbour Ferries",
+        destination: "Sydney",
+        blurb: "A day riding the ferries from Circular Quay: past the Opera House and out through the heads on the big Manly boat, under the Bridge on the casino run to Darling Harbour, across to quiet Balmoral, fish and chips among the gulls — then the last ritual: the little Neutral Bay ferry, the bus up the hill, and a schooner at The Oaks.",
+        banner: [
+            "SYDNEY HARBOUR",
+            "A day on the ferries from Circular Quay. (c) 2026",
+            "Type HELP for commands. TAKE an OPAL CARD, then board the big Manly ferry.",
+            "─────────────────────────────",
+        ].join("\n"),
+        startRoomID: "circularQuay",
+        maxScore: 60,
+        startingCoins: 20,
+        build: buildSydneyWorld,
+        portalGate(game, direction) {
+            if (game.roomID !== "circularQuay") return null;
+            if (["north", "east", "west", "south"].includes(direction) &&
+                !game.inventoryKinds().has("opal")) {
+                return "The Opal gate flashes red and stays shut — no tap, no travel. TAKE an OPAL CARD from the machine by the gates first.";
+            }
+            if (direction === "east" && !dayDone(game)) {
+                return "The deckhand on the little Neutral Bay boat gives you a look. \"Homeward already? Make a day of it first — the big Manly boat's at Wharf 3, the casino run goes under the Bridge, and the Balmoral boat's just along the quay. Plenty of ferries home tonight.\"";
+            }
+            return null;
+        },
+        portalDirection(game, id) {
+            const key = game.roomID + "/" + id;
+            switch (key) {
+                case "circularQuay/manlyFerry": return "north";
+                case "circularQuay/balmoralFerry": return "west";
+                case "circularQuay/casinoFerry": return "south";
+                case "circularQuay/nbFerry": return "east";
+                case "manlyWharf/returnFerry": return "south";
+                case "nbWharf/bus": return "up";
+                default: return null;
+            }
+        },
+        fixtureLine(game, id) {
+            const item = game.item(id);
+            if (!item) return null;
+            if (item.forSale) {
+                const name = item.name.charAt(0).toUpperCase() + item.name.slice(1);
+                return `${name} — ${item.price} coins.`;
+            }
+            switch (id) {
+                case "manlyFerry":
+                    return "The big Manly ferry is loading at Wharf 3. (BOARD the MANLY FERRY when you've tapped on.)";
+                case "balmoralFerry":
+                    return game.has("sawBalmoral")
+                        ? "The Balmoral ferry rests along the quay, its morning's work done."
+                        : "A little ferry along the quay flies the board for BALMORAL BEACH — the quiet one. (BOARD the BALMORAL ferry for the detour.)";
+                case "casinoFerry":
+                    return game.has("underBridge")
+                        ? "The Darling Harbour boat is back at its berth, its bridge-ducking done for the hour."
+                        : "The Darling Harbour boat flies the board for STAR CITY — the run that goes right under the Bridge. (BOARD the CASINO ferry.)";
+                case "nbFerry":
+                    return dayDone(game)
+                        ? "The little Neutral Bay ferry idles at Wharf 4, lights on, waiting to take you home. (BOARD the NEUTRAL BAY ferry.)"
+                        : "The little First Fleet-class Neutral Bay ferry idles at Wharf 4 — your ride home, later.";
+                case "returnFerry":
+                    return "The return ferry to Circular Quay is loading at the wharf. (BOARD the RETURN FERRY when Manly's done with you.)";
+                case "bus":
+                    return "The bus up to Military Road idles at the top of the wharf ramp. (BOARD the BUS — The Oaks is two stops up the hill.)";
+                case "deckhand":
+                    return "A deckhand coils rope by the rail, unbothered by the entire Pacific.";
+                case "gulls":
+                    return "Silver gulls patrol the sand with the confidence of tax collectors.";
+                case "chipShop":
+                    return "The chip-shop owner works the fryer behind the counter.";
+                case "publican":
+                    return "The publican pulls schooners under the big oak's lantern light.";
+                default:
+                    return null;
+            }
+        },
+        onMoveObject(game, id) {
+            // The craps table at Star City: $100 on the pass line, once per
+            // visit — win or lose, the roll is part of the day. The croupier
+            // stakes broke ferry-riders, so the day never stalls.
+            if (id === "crapsTable") {
+                if (game.has("playedCraps")) {
+                    game.emit("The croupier tips his head. \"One legendary roll per visit, champ. House policy — named after you.\"");
+                    return true;
+                }
+                game.set("playedCraps");
+                const staked = game.spend(5);
+                const intro = staked
+                    ? "You change your ferry money at the rail — call it a hundred — and set it on the pass line. The boxman nods, the stickman sends you the dice, and the table goes quiet the way tables do. "
+                    : "You turn out your pockets and the croupier waves it away. \"Ferry crowd? First roll's on Star City.\" A hundred in house chips lands on the pass line, the stickman sends you the dice, and the table goes quiet the way tables do. ";
+                switch (Math.floor(Math.random() * 3)) {
+                    case 0:
+                        game.earn(staked ? 10 : 5);
+                        game.emit(intro + `You roll — SEVEN, clean off the come-out. "Winner, front line winner!" The pass line pays, the table roars like the Freshwater at the heads, and a woman in sequins you will never see again squeezes your shoulder like family. (You're up — ${game.coins} coins.)`);
+                        break;
+                    case 1:
+                        game.earn(staked ? 10 : 5);
+                        game.emit(intro + `EIGHT. "Point is eight!" The table settles in behind you, the dice go round twice more with the seven circling like a gull — and then the eight comes back. "Pass line, pay the line!" Strangers shake your hand. For one roll of the dice, you were Star City's favourite person. (You're up — ${game.coins} coins.)`);
+                        break;
+                    default:
+                        game.emit(intro + `You roll — three. Craps. The croupier's rake is gentle but final, and a hundred dollars departs in roughly seven seconds. The gull at Manly was at least charming about it. Still: this, too, is the complete Star City experience, and nobody can say you didn't play. (You have ${game.coins} coins.)`);
+                        break;
+                }
+                return true;
+            }
+            // DRINK the schooner at The Oaks — the day's last ritual, and the win.
+            if (game.item(id) && game.item(id).kind === "schooner") {
+                game.consumeFromInventory(id);
+                game.award(5, null);
+                game.win("You carry the schooner out to the courtyard and find a seat under the great oak itself — the tree the pub is named for, strung with lights, half the neighbourhood settled beneath it. The first sip goes down like the whole day distilled: the big boat and the heads, the chips and the felon gull, the dice at Star City, Balmoral's quiet water, the sunset run home, the little ferry, the bus up the hill. You were seven minutes from the city and a thousand miles from care all along. Last of the schooner, short walk home. Night, harbour.");
+                return true;
+            }
+            // EAT the fish and chips — but only where they belong: on the sand.
+            if (!(game.item(id) && game.item(id).kind === "chips")) return false;
+            if (game.roomID !== "manlyBeach") {
+                game.emit("Not here. Fish and chips have one correct destination, and it's the sand at Manly — hot paper parcel, ocean view, gulls at a respectful-ish distance.");
+                return true;
+            }
+            if (game.has("ateChips")) {
+                game.emit("Only the greasy paper is left, and one gull is still auditing it.");
+                return true;
+            }
+            game.consumeFromInventory(id);
+            game.set("ateChips");
+            game.award(5, "You unwrap the parcel on the warm sand — salt, vinegar, steam — and the beach's entire gull population goes on high alert. You get through most of it in peace, and then one white-and-silver professional drops out of the sun and takes a chip clean out of your fingers, barely breaking stride. You'd be angry if it weren't so perfectly executed. Every Sydney childhood contains this exact moment; now yours does too.");
+            return true;
+        },
+        onGive(game, gift, recipient) {
+            if (recipient !== "gulls") return false;
+            if (game.item(gift) && game.item(gift).kind === "chips") {
+                game.emit("Give the gulls your ENTIRE fish and chips? A nearby lifesaver shakes his head slowly, once. Some lines exist. (They'll help themselves to a chip soon enough.)");
+            } else {
+                game.emit("The gull inspects the offering, files it under 'not chips', and resumes patrolling.");
+            }
+            return true;
+        },
+        onTalk(game, id) {
+            switch (id) {
+                case "deckhand":
+                    game.emit("\"First trip or thousandth?\" the deckhand asks, and doesn't wait for the answer. \"Best seats are at the rail. Opera House to starboard going out, Fort Denison mid-harbour — and hang on at the heads, the old girl likes to dance when the swell's up.\"");
+                    return true;
+                case "chipShop":
+                    game.emit("\"Fish and chips, best on the beaches,\" the owner says, already reaching for the paper. \"Take 'em down to the sand — that's the law. And watch the gulls, they've got a union.\"");
+                    return true;
+                case "gulls":
+                    game.emit("The nearest gull looks you dead in the eye and screams. The message — regarding chips, and your obligations concerning them — could not be clearer.");
+                    return true;
+                case "locals":
+                    game.emit("A woman with two grocery bags nods at you — the small-ferry nod, reserved for people who know that the best commute on earth is seven minutes across the world's best harbour. \"Nearly home,\" she says, to you, or to the harbour, or both.");
+                    return true;
+                default:
+                    return false;
+            }
+        },
+        onExamine(game, id) {
+            // The sights are watched from the big ferry's deck rail — looking
+            // is the sightseeing, spotted and scored once each.
+            const spot = (flag, points, text) => {
+                if (game.has(flag)) {
+                    game.emit(text);
+                } else {
+                    game.set(flag);
+                    game.award(points, text);
+                }
+                return true;
+            };
+            switch (id) {
+                case "operaHouse":
+                    return spot("spotOpera", 5, "The Opera House slides past to starboard, close enough to see the tile-shimmer on the sails — a million self-cleaning ceramic scales catching the sun. From the water it does the thing it never does in photographs: it moves, sail behind sail, rearranging itself as the ferry swings. The whole harbour is its stage and it knows it.");
+                case "harbourBridge":
+                    return spot("spotBridge", 5, "Astern, the Harbour Bridge holds up its whole arc of sky — the old coathanger, half a million rivet heads catching the light, a train rumbling across like a toy, and a chain of tiny climbers strung over the very top of the arch. Somewhere under the deck, the harbour keeps all of Sydney's days from coming apart.");
+                case "fortDenison":
+                    return spot("spotDenison", 5, "Mid-harbour, alone on its rock, sits Fort Denison — 'Pinchgut' to the convicts once marooned there on bread and water. The squat Martello tower was finished in 1857, just in time to be obsolete, and its one o'clock gun still fires across the water it never once defended in anger.");
+                default:
+                    return false;
+            }
+        },
+        onEnterRoom(game, roomID) {
+            const award = (flag, points, note) => {
+                if (game.has(flag)) return;
+                game.set(flag);
+                game.award(points, note);
+            };
+            switch (roomID) {
+                case "manlyDeck":
+                    award("boardedManly", 5, "The big Freshwater-class ferry gives one long blast and backs off Wharf 3, all four decks of her, and the Quay opens out into the whole shining harbour. You take the rail like a regular. (LOOK at the OPERA HOUSE, the BRIDGE, and FORT DENISON as they go by — the trip north to the heads is the show.)");
+                    break;
+                case "theHeads":
+                    award("crossedHeads", 10, "Between North Head and South Head the Pacific gets its say: the harbour chop turns to long green ocean rollers and the big ferry rides up one and down the other side, spray bursting over the bow rail to a chorus of shrieks and laughter. For half a minute you are properly at sea. The old Freshwaters were built ocean-going for exactly this half minute, and everyone aboard grins like it's the first time — the regulars most of all.");
+                    break;
+                case "manlyWharf":
+                    if (!game.has("sawManlyWharf")) {
+                        game.set("sawManlyWharf");
+                        game.emit("The ferry swings in at Manly Wharf, where the old sign said it best: 'Seven miles from Sydney and a thousand miles from care.' The Corso runs EAST toward the ocean beach — follow the smell of salt and hot chips.");
+                    }
+                    break;
+                case "manlyBeach":
+                    award("sawBeach", 5, "Manly Beach opens out under its long line of Norfolk pines — a mile of gold sand, the surf coming in in ruled lines, board-riders scattered like punctuation, and the lifesavers' flags snapping in the sea breeze. If you're carrying chips, the sand is where they're EATEN. The gulls already know.");
+                    break;
+                case "balmoralBeach":
+                    award("sawBalmoral", 5, "The little ferry potters around the point and lands you at Balmoral — the quiet one: flat green harbour water instead of surf, the white rotunda on its lawn, the wooden footbridge out to Rocky Point Island, and morning swimmers doing slow laps between the shark-net buoys. Manly is a celebration; Balmoral is a secret. You keep it a while, then catch the boat back EAST to the Quay.");
+                    break;
+                case "darlingDeck":
+                    award("underBridge", 5, "The Darling Harbour boat swings west out of the Quay and heads straight for the Bridge — and then you're UNDER it: the deck goes shadow-cool for three long heartbeats, the whole sky replaced by girders and half a million rivets, a train hammering over the top like weather. Everyone looks up. Everyone always looks up. Then the sun snaps back on and the boat putters on toward Darling Harbour. (Star City is FORWARD.)");
+                    break;
+                case "starCity":
+                    if (!game.has("sawStarCity")) {
+                        game.set("sawStarCity");
+                        game.emit("The boat ties up at Darling Harbour under the glow of Star City — the casino humming away like a docked spaceship, all carpet and chandeliers and optimism. And there, through the noise, the CRAPS tables are clattering. You know what the ritual demands: PLAY CRAPS — a hundred on the pass line. The boat back to the Quay leaves when you're done.");
+                    }
+                    break;
+                case "returnDeck":
+                    award("sunsetReturn", 5, "The ferry home pulls out into a harbour going gold. The heads give one last polite roll, and then the city grows off the bow — the Bridge's arch black against the last light, the Opera House's sails catching the pink of it, ten thousand windows coming on. Everyone on deck goes quiet at about the same time. This is the other famous view, the one the postcards can't do: coming home across the water.");
+                    break;
+                case "nbWharf":
+                    if (!game.has("sawNBWharf")) {
+                        game.set("sawNBWharf");
+                        game.emit("Seven quiet minutes across the dark harbour, engine thrumming, grocery bags at ankles, the city sliding by like something that belongs to you — and the little ferry noses into the Hayes Street wharf at Neutral Bay. The bus idles at the top of the ramp, and the day has exactly one stop left in it. (BOARD the BUS up to The Oaks.)");
+                    }
+                    break;
+                case "oaksPub":
+                    if (!game.has("sawOaks")) {
+                        game.set("sawOaks");
+                        game.emit("Two stops up Military Road and here it is: The Oaks, lights warm, the courtyard murmuring under its enormous namesake oak. One correct way to end this day — BUY a SCHOONER, and DRINK it under the tree.");
+                    }
+                    break;
+                default:
+                    break;
+            }
+        },
+        hintStage(game) {
+            if (!game.inventoryKinds().has("opal")) {
+                return { key: "opal", clues: [
+                    "No tap, no travel — the harbour runs on Opal.",
+                    "TAKE an OPAL CARD from the machine by the gates.",
+                ] };
+            }
+            if (!game.has("boardedManly")) {
+                return { key: "board", clues: [
+                    "The big boat at Wharf 3 is the whole point of the day.",
+                    "BOARD the MANLY FERRY.",
+                ] };
+            }
+            const sights = [];
+            if (!game.has("spotOpera")) sights.push("the OPERA HOUSE");
+            if (!game.has("spotBridge")) sights.push("the BRIDGE");
+            if (!game.has("spotDenison")) sights.push("FORT DENISON");
+            if (game.roomID === "manlyDeck" && sights.length) {
+                return { key: "sights:" + sights.join("|"), clues: [
+                    "The deck rail is the best seat in Sydney.",
+                    `LOOK AT ${sights.join(", then ")} — then carry on FORWARD to the heads.`,
+                ] };
+            }
+            if (!game.has("crossedHeads")) {
+                return { key: "heads", clues: [
+                    "The open water is ahead — hold the rail.",
+                    "Keep going FORWARD, out through the heads to Manly.",
+                ] };
+            }
+            if (!game.has("ateChips")) {
+                return { key: "chips", clues: [
+                    "Manly has exactly one correct lunch.",
+                    game.inventoryKinds().has("chips")
+                        ? "Take them EAST to the beach and EAT the CHIPS on the sand. Mind the gulls."
+                        : "Walk the Corso EAST, BUY FISH AND CHIPS, then EAT them on the beach. Mind the gulls.",
+                ] };
+            }
+            if (sights.length) {
+                return { key: "missed:" + sights.join("|"), clues: [
+                    "You missed some of the show on the way out — the ride back gives you another look.",
+                    `You'll pass ${sights.join(" and ")} again from the return ferry... but the outbound deck was the spot. (Next crossing: eyes up.)`,
+                ] };
+            }
+            if (!game.has("sunsetReturn")) {
+                return { key: "return", clues: [
+                    "The other famous view is the one coming home.",
+                    "Head back WEST to Manly Wharf and BOARD the RETURN FERRY.",
+                ] };
+            }
+            if (!game.has("underBridge")) {
+                return { key: "casino", clues: [
+                    "One run goes UNDER the Bridge — you can't call the day done without it.",
+                    "From the Quay, BOARD the CASINO ferry to Star City.",
+                ] };
+            }
+            if (!game.has("playedCraps")) {
+                return { key: "craps", clues: [
+                    "Star City has one more ritual before the boat back.",
+                    "PLAY CRAPS — a hundred on the pass line. Win or lose, you play.",
+                ] };
+            }
+            if (!game.has("sawBalmoral")) {
+                return { key: "balmoral", clues: [
+                    "One more wharf before home — the quiet one.",
+                    "From the Quay, BOARD the BALMORAL ferry for the detour, then the boat back.",
+                ] };
+            }
+            switch (game.roomID) {
+                case "nbWharf":
+                    return { key: "bus", clues: [
+                        "The day has one stop left, and it's up the hill.",
+                        "BOARD the BUS to The Oaks.",
+                    ] };
+                case "oaksPub":
+                    return { key: "schooner", clues: [
+                        "You know how this ends.",
+                        game.inventoryKinds().has("schooner")
+                            ? "DRINK the SCHOONER under the oak."
+                            : "BUY a SCHOONER, then DRINK it under the oak.",
+                    ] };
+                default:
+                    return { key: "home", clues: [
+                        "The best boat of the day is the last one — the commute.",
+                        "At the Quay, BOARD the NEUTRAL BAY ferry, then the BUS up to The Oaks.",
+                    ] };
+            }
+        },
+    };
+}
+
+const SCENARIOS = [houseScenario(), townScenario(), riverboatScenario(), fortPulaskiScenario(), roppongiScenario(), fujiScenario(), greenwichScenario(), sydneyScenario()];
 
 // MARK: - World Builders
 
@@ -2954,6 +3291,157 @@ function buildGreenwichWorld() {
     addRoom({ id: "blackheath", title: "Blackheath",
         description: "Out through the top gate of the park and onto Blackheath — wide, flat, and open to the sky, kites up, the village lights ahead across the grass. Home is at the far side of the green. The park (and the bench) are back NORTH.",
         exits: { north: "wolfeViewpoint" }, items: ["heath"] });
+
+    return { rooms, items };
+}
+
+function buildSydneyWorld() {
+    const items = {};
+    const addItem = (p) => { const it = makeItem(p); items[it.id] = it; };
+
+    // Circular Quay.
+    addItem({ id: "opalMachine", name: "Opal machine", nouns: ["machine", "opal"],
+        description: "The Opal top-up machine by the gates, screen glowing, a tray of fresh cards below. TAKE a CARD and the harbour is yours.", isFixture: true });
+    addItem({ id: "opalCard", name: "Opal card", nouns: ["card", "opal", "ticket"],
+        description: "A black-and-white Opal card, still warm from the machine — the key to every wharf on the harbour.",
+        isTakeable: true, kind: "opal" });
+    addItem({ id: "departureBoard", name: "departure board", nouns: ["board", "departures", "sign"],
+        description: "The wharf departure board, flipping through the morning's sailings.",
+        readText: "\"CIRCULAR QUAY — DEPARTURES\n  • Wharf 3 — F1 MANLY, Freshwater-class, 30 min — the big one.\n  • Along the quay — BALMORAL BEACH, the quiet one.\n  • Inner harbour — STAR CITY via Darling Harbour — the one that goes under the Bridge.\n  • Wharf 4 — NEUTRAL BAY via Kurraba & Hayes St — the little one. The way home.\nTap ON before boarding.\"",
+        isFixture: true });
+    addItem({ id: "buskers", name: "buskers", nouns: ["buskers", "busker", "didgeridoo"],
+        description: "A busker's didgeridoo rolls under the wharf noise while a living statue holds impossibly still and a man makes bubbles the size of dogs. Circular Quay in ordinary working order.",
+        isFixture: true, isCreature: true,
+        dialogue: "The living statue does not respond, on principle. The bubble man nods you toward Wharf 3: \"Big boat's the best show in town, mate.\"" });
+    addItem({ id: "manlyFerry", name: "Manly ferry", nouns: ["manly", "ferry", "freshwater"],
+        description: "The Freshwater-class Manly ferry at Wharf 3 — four decks, ocean-going bones, green and cream like she's always been. The biggest thing on the harbour that isn't a bridge.", isFixture: true });
+    addItem({ id: "balmoralFerry", name: "Balmoral ferry", nouns: ["balmoral", "beach"],
+        description: "The little Balmoral boat, board flying for the quiet beach around the point.", isFixture: true });
+    addItem({ id: "casinoFerry", name: "Darling Harbour ferry", nouns: ["casino", "star", "darling", "city"],
+        description: "The Darling Harbour boat — the run that swings west out of the Quay and goes clean under the Harbour Bridge on its way to Star City.", isFixture: true });
+    addItem({ id: "nbFerry", name: "Neutral Bay ferry", nouns: ["neutral", "small", "fleet"],
+        description: "A little First Fleet-class ferry at Wharf 4, sturdy as a work boot — the Neutral Bay run, seven minutes of the best commute on earth.", isFixture: true });
+
+    // The Manly ferry deck — the sights are watched from the rail.
+    addItem({ id: "deckhand", name: "deckhand", nouns: ["deckhand", "crew", "sailor"],
+        description: "A deckhand in a high-vis vest, coiling rope with the calm of ten thousand crossings.",
+        isFixture: true, isCreature: true });
+    addItem({ id: "operaHouse", name: "Opera House", nouns: ["opera", "house", "sails"],
+        description: "The white sails off to starboard — best watched from the rail.", isFixture: true });
+    addItem({ id: "harbourBridge", name: "Harbour Bridge", nouns: ["bridge", "harbour", "coathanger", "arch"],
+        description: "The great arch astern — best watched from the rail.", isFixture: true });
+    addItem({ id: "fortDenison", name: "Fort Denison", nouns: ["fort", "denison", "pinchgut", "island"],
+        description: "The little fortified island mid-harbour — best watched from the rail.", isFixture: true });
+    addItem({ id: "kirribilli", name: "harbourside houses", nouns: ["houses", "kirribilli", "shore"],
+        description: "The harbour's edges slide past — pocket beaches, moored yachts, houses stacked down to the waterline, every one of them smug about it.", isFixture: true });
+
+    // The heads.
+    addItem({ id: "swell", name: "ocean swell", nouns: ["swell", "rollers", "waves", "spray"],
+        description: "Long green Pacific rollers marching in through the gap between the heads, each one lifting the whole four-deck ferry like it weighs nothing.", isFixture: true });
+
+    // Manly.
+    addItem({ id: "wharfSign", name: "wharf sign", nouns: ["sign", "wharf"],
+        description: "The old sentiment, kept alive on the wharf boards.",
+        readText: "\"MANLY — seven miles from Sydney and a thousand miles from care.\"",
+        isFixture: true });
+    addItem({ id: "returnFerry", name: "return ferry", nouns: ["return", "ferry", "home"],
+        description: "The next Freshwater back to the city, loading at the wharf.", isFixture: true });
+    addItem({ id: "pines", name: "Norfolk pines", nouns: ["pines", "pine", "trees"],
+        description: "The Corso's great Norfolk pines, planted in the 1850s and now the tallest things in Manly that aren't waves.", isFixture: true });
+    addItem({ id: "chipShop", name: "chip shop", nouns: ["shop", "owner", "fryer"],
+        description: "A chip shop on the Corso doing exactly one thing at world standard, the fryer roaring like light surf.",
+        isFixture: true, isCreature: true });
+    addItem({ id: "fishChips", name: "fish and chips", nouns: ["chips", "fish", "parcel", "chippies"],
+        description: "A hot paper parcel of fish and chips, salt and vinegar soaking through the wrapping. It has an appointment with the sand.",
+        isTakeable: true, isFixture: true, forSale: true, price: 5, kind: "chips" });
+    addItem({ id: "gelato", name: "gelato", nouns: ["gelato", "icecream", "cone"],
+        description: "A scoop of lemon gelato, melting faster than any human can reasonably eat.",
+        isTakeable: true, isFixture: true, forSale: true, price: 3, kind: "gelato" });
+    addItem({ id: "surf", name: "surf", nouns: ["surf", "waves", "surfers", "ocean"],
+        description: "The Pacific coming in in ruled lines, board-riders scattered across the break like punctuation, the lifesavers' flags snapping in the breeze.", isFixture: true });
+    addItem({ id: "gulls", name: "silver gulls", nouns: ["gulls", "gull", "seagull", "seagulls"],
+        description: "Silver gulls — red beaks, cold eyes, immaculate paperwork. They have watched your parcel since the Corso, and they are patient in the way of all great predators.",
+        isFixture: true, isCreature: true });
+
+    // Balmoral.
+    addItem({ id: "rotunda", name: "rotunda", nouns: ["rotunda", "bandstand"],
+        description: "Balmoral's white rotunda on its lawn above the sand, hosting nothing this morning but shade and one sleeping dog.", isFixture: true });
+    addItem({ id: "islandBridge", name: "island footbridge", nouns: ["footbridge", "island", "rocky"],
+        description: "The old wooden footbridge arching out to Rocky Point Island — twenty steps to a tiny island with the whole harbour around it.", isFixture: true });
+    addItem({ id: "swimmers", name: "morning swimmers", nouns: ["swimmers", "swimmer", "laps"],
+        description: "Swimmers doing unhurried laps between the shark-net buoys, caps bright against the green water, as they have every morning since before anyone can remember.", isFixture: true });
+
+    // Star City.
+    addItem({ id: "crapsTable", name: "craps table", nouns: ["craps", "table", "dice", "pass"],
+        description: "The craps table in full cry — chips stacked like little city skylines, the stickman's patter rolling, and the pass line waiting for exactly one hundred of anyone's dollars.", isFixture: true });
+    addItem({ id: "croupier", name: "croupier", nouns: ["croupier", "dealer", "stickman", "boxman"],
+        description: "The croupier, immaculate, running the table like a tide chart — he has seen every system ever invented lose politely.",
+        isFixture: true, isCreature: true,
+        dialogue: "\"Pass line, table minimum's a hundred,\" the croupier says, not unkindly, sliding the dice your way with the stick. \"Ferry crowd always rolls once. It's practically maritime law.\"" });
+
+    // The way home: the little ferry, the wharf, the bus, and The Oaks.
+    addItem({ id: "locals", name: "locals", nouns: ["locals", "woman", "commuters", "passengers"],
+        description: "A handful of locals with grocery bags and folded newspapers — the small-ferry crowd, headed home like always.",
+        isFixture: true, isCreature: true });
+    addItem({ id: "hayesWharf", name: "Hayes Street wharf", nouns: ["wharf", "hayes", "jetty"],
+        description: "The little Hayes Street wharf, one lamp on, water slapping the piles — the quietest front door in Sydney.", isFixture: true });
+    addItem({ id: "bus", name: "bus", nouns: ["bus"],
+        description: "The bus up to Military Road, doors open, driver waiting with the patience of a man who has seen every ferry come in for twenty years.", isFixture: true });
+    addItem({ id: "oakTree", name: "great oak", nouns: ["oak", "tree"],
+        description: "The Oaks' namesake: an enormous oak filling the whole courtyard, strung with lights, older than the pub around it and fully aware of it.", isFixture: true });
+    addItem({ id: "publican", name: "publican", nouns: ["publican", "barman", "bartender"],
+        description: "The publican, pulling schooners with an economy of motion perfected over decades of Sunday evenings.",
+        isFixture: true, isCreature: true,
+        dialogue: "\"Ferry crowd,\" the publican says approvingly, reading the salt on you. \"Schooner? Courtyard's under the tree — best seat's whichever one's free.\"" });
+    addItem({ id: "schooner", name: "schooner of pale ale", nouns: ["schooner", "beer", "ale", "pint"],
+        description: "A cold schooner of pale ale, condensation running down the glass. It belongs under the oak.",
+        isTakeable: true, isFixture: true, forSale: true, price: 4, kind: "schooner" });
+
+    const rooms = {};
+    const addRoom = (p) => { const r = makeRoom(p); rooms[r.id] = r; };
+
+    addRoom({ id: "circularQuay", title: "Circular Quay",
+        description: "Circular Quay at mid-morning, the whole harbour's front hall: wharves stacked with ferries, didgeridoo rolling under the announcements, the Bridge over one shoulder and the Opera House down the other. The Opal machine stands by the gates (TAKE a CARD). The big MANLY boat loads at Wharf 3, the CASINO run to Darling Harbour goes under the Bridge, the little BALMORAL boat waits along the quay, and the NEUTRAL BAY boat — the way home, later — idles at Wharf 4.",
+        exits: { north: "manlyDeck", west: "balmoralBeach", south: "darlingDeck", east: "nbDeck" },
+        items: ["opalMachine", "opalCard", "departureBoard", "buskers", "manlyFerry", "casinoFerry", "balmoralFerry", "nbFerry"] });
+    addRoom({ id: "manlyDeck", title: "Aboard the Freshwater",
+        description: "The open deck of the big Freshwater, rail-side, wind full of salt and sunscreen. The harbour parades past: the OPERA HOUSE, the BRIDGE astern, FORT DENISON on its rock (LOOK at each from the rail). The heads are FORWARD, where the ocean gets in.",
+        exits: { north: "theHeads" },
+        items: ["deckhand", "operaHouse", "harbourBridge", "fortDenison", "kirribilli"] });
+    addRoom({ id: "theHeads", title: "The Heads",
+        description: "The gap where the harbour meets the Pacific — North Head and South Head standing off to either side, and the open sea rolling in between them. Hold the rail. Manly is FORWARD.",
+        exits: { north: "manlyWharf" }, items: ["swell"] });
+    addRoom({ id: "manlyWharf", title: "Manly Wharf",
+        description: "Manly Wharf, all thongs and dripping ice creams and boards under arms. The Corso runs EAST to the ocean beach; the RETURN FERRY to the city loads here when you're ready.",
+        exits: { east: "corso", south: "returnDeck" }, items: ["wharfSign", "returnFerry"] });
+    addRoom({ id: "corso", title: "The Corso",
+        description: "The Corso — Manly's broad walk from harbour to ocean under the big Norfolk pines, smelling of salt, sunscreen, and the chip shop's fryer (BUY FISH AND CHIPS; gelato for afters). The beach is EAST; the wharf is back WEST.",
+        exits: { west: "manlyWharf", east: "manlyBeach" },
+        items: ["pines", "chipShop", "fishChips", "gelato"] });
+    addRoom({ id: "manlyBeach", title: "Manly Beach",
+        description: "Manly Beach, a mile of gold under the Norfolk pines, surf coming in in ruled lines. The sand is where fish and chips are EATEN — the gulls have already opened a file on you. The Corso is back WEST.",
+        exits: { west: "corso" }, items: ["surf", "gulls"] });
+    addRoom({ id: "returnDeck", title: "The Sunset Run Home",
+        description: "The return Freshwater's open deck, bow toward the city, the light going long and gold. The Quay is FORWARD, at the end of the show.",
+        exits: { north: "circularQuay" }, items: ["deckhand"] });
+    addRoom({ id: "balmoralBeach", title: "Balmoral Beach",
+        description: "Balmoral: the quiet beach — flat green harbour water, the white rotunda on the lawn, the footbridge out to Rocky Point Island, swimmers doing slow laps inside the net. No surf, no hurry. The boat back to the Quay is EAST.",
+        exits: { east: "circularQuay" }, items: ["rotunda", "islandBridge", "swimmers"] });
+    addRoom({ id: "darlingDeck", title: "Under the Bridge",
+        description: "The Darling Harbour boat's little open stern deck, swinging west out of the Quay with the Harbour Bridge growing until it is the entire sky. Star City is FORWARD.",
+        exits: { north: "starCity" }, items: [] });
+    addRoom({ id: "starCity", title: "Star City — Darling Harbour",
+        description: "Star City at Darling Harbour — carpet, chandeliers, and optimism, the craps tables clattering under the lights (PLAY CRAPS: table minimum a hundred, pass line open). The boat back to the Quay is FORWARD when the dice are done with you.",
+        exits: { north: "circularQuay" }, items: ["crapsTable", "croupier"] });
+    addRoom({ id: "nbDeck", title: "The Neutral Bay Boat",
+        description: "The little First Fleet ferry, inside cabin warm and bright, a handful of locals with groceries and newspapers. Seven minutes across the dark water. Hayes Street wharf is FORWARD — home.",
+        exits: { north: "nbWharf" }, items: ["locals"] });
+    addRoom({ id: "nbWharf", title: "Hayes Street Wharf — Neutral Bay",
+        description: "The little wharf at the foot of Hayes Street, one lamp on, the city glittering back across the water. The BUS up to Military Road idles at the top of the ramp — The Oaks is two stops up the hill.",
+        exits: { up: "oaksPub" }, items: ["hayesWharf", "bus"] });
+    addRoom({ id: "oaksPub", title: "The Oaks",
+        description: "The Oaks, Neutral Bay: warm light, low roar of a good crowd, and the courtyard filled entirely by its enormous namesake oak, strung with lights. The bar is pouring (BUY a SCHOONER), and the correct final move of this entire day is to DRINK it under the tree.",
+        exits: {}, items: ["oakTree", "publican", "schooner"] });
 
     return { rooms, items };
 }
