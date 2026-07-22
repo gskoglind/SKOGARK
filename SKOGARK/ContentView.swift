@@ -2,14 +2,6 @@ import SwiftUI
 import UIKit
 import AVFoundation
 import WebKit
-import MapKit
-
-/// Configuration for the optional live-ship map. Set `vesselAPIBase` to the URL
-/// of your deployed AIS proxy (see server/README.md) to enable the in-app map
-/// and Captain Mike naming a real nearby ship. Leave it `nil` to hide those.
-enum RiverboatConfig {
-    static let vesselAPIBase: String? = nil
-}
 
 @main struct MyApp: App {
     var body: some Scene {
@@ -190,11 +182,8 @@ struct GameView: View {
     @State private var narrator = Narrator()
     @State private var spokenCount = 0
 
-    // Live webcams / ship map (riverboat only).
+    // Live webcams (riverboat only).
     @State private var showCams = false
-    @State private var showShips = false
-    @State private var announcedShipMMSIs: Set<Int> = []
-    @State private var lastShipLeg: String? = nil
 
     private var isRiverboat: Bool { game.scenario.id == "riverboat" }
 
@@ -217,16 +206,11 @@ struct GameView: View {
         }
         .background(Color.black)
         .onAppear { flashLocation(game.roomTitle); speakPending() }
-        .onChange(of: game.roomID) { flashLocation(game.roomTitle); announceShipIfNeeded() }
+        .onChange(of: game.roomID) { flashLocation(game.roomTitle) }
         .onChange(of: game.transcript.count) { speakPending() }
         .onDisappear { narrator.stop() }
         .sheet(isPresented: $showCams) {
             CamsView(initialSlug: Self.camSlug(for: game.roomID))
-        }
-        .sheet(isPresented: $showShips) {
-            if let base = RiverboatConfig.vesselAPIBase {
-                ShipMapView(apiBase: base)
-            }
         }
     }
 
@@ -236,38 +220,6 @@ struct GameView: View {
         if roomID.hasPrefix("bridge") { return "talmadge-bridge" }
         if roomID.hasPrefix("port") { return "pilots-dock" }
         return "river-street-east" // River Street leg (and the dock)
-    }
-
-    /// As the boat passes the working river, Captain Mike names a real ship out
-    /// there right now (best-effort; needs a configured proxy, ignores errors).
-    /// A cruise leg id, e.g. "riverD4" -> "river" (the dock and fort have none).
-    private func legOf(_ roomID: String) -> String {
-        if let r = roomID.range(of: "D[0-9]+$", options: .regularExpression) {
-            return String(roomID[..<r.lowerBound])
-        }
-        return roomID
-    }
-
-    /// Announces a different real nearby ship once per cruise leg (needs the
-    /// AIS proxy; silent otherwise, and network errors are ignored).
-    private func announceShipIfNeeded() {
-        guard let base = RiverboatConfig.vesselAPIBase, isRiverboat,
-              let url = URL(string: base + "/vessels") else { return }
-        let legs: Set<String> = ["river", "port", "bridge", "city", "waving"]
-        let leg = legOf(game.roomID)
-        guard legs.contains(leg), leg != lastShipLeg else { return }
-        lastShipLeg = leg
-        Task {
-            guard let (data, _) = try? await URLSession.shared.data(from: url),
-                  let resp = try? JSONDecoder().decode(VesselResponse.self, from: data) else { return }
-            await MainActor.run {
-                guard let ship = resp.vessels.first(where: {
-                    !($0.name ?? "").isEmpty && !announcedShipMMSIs.contains($0.mmsi)
-                }) else { return }
-                announcedShipMMSIs.insert(ship.mmsi)
-                game.emit("Captain Mike: \"Off to the side, the \(ship.name!) — a \(ship.kind ?? "vessel") on the river with us.\"")
-            }
-        }
     }
 
     /// Speaks any transcript entries added since the last check (skipping the
@@ -742,15 +694,6 @@ struct GameView: View {
                 .foregroundStyle(.green)
                 .padding(.leading, 12)
                 .accessibilityLabel("Live webcams")
-
-                if RiverboatConfig.vesselAPIBase != nil {
-                    Button { showShips = true } label: {
-                        Image(systemName: "map.fill").font(.subheadline)
-                    }
-                    .foregroundStyle(.green)
-                    .padding(.leading, 12)
-                    .accessibilityLabel("Live ship map")
-                }
             }
         }
         .padding(.horizontal)
@@ -1000,85 +943,6 @@ struct CamsView: View {
     }
 }
 
-// MARK: - Live Ship Map
-
-/// One vessel from the AIS proxy's /vessels feed.
-struct Vessel: Identifiable, Decodable {
-    let mmsi: Int
-    let name: String?
-    let lat: Double
-    let lon: Double
-    let sog: Double?
-    let kind: String?
-
-    var id: Int { mmsi }
-    var coordinate: CLLocationCoordinate2D { .init(latitude: lat, longitude: lon) }
-}
-
-struct VesselResponse: Decodable {
-    let vessels: [Vessel]
-}
-
-/// A live map of vessels on the Savannah River, polled from the AIS proxy.
-struct ShipMapView: View {
-    let apiBase: String
-    @Environment(\.dismiss) private var dismiss
-    @State private var vessels: [Vessel] = []
-    @State private var status = "Loading live ship positions…"
-
-    private static let savannah = MapCameraPosition.region(
-        MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 32.083, longitude: -81.09),
-            span: MKCoordinateSpan(latitudeDelta: 0.15, longitudeDelta: 0.15)
-        )
-    )
-
-    var body: some View {
-        NavigationStack {
-            Map(initialPosition: Self.savannah) {
-                ForEach(vessels) { vessel in
-                    Marker(vessel.name ?? "Vessel", systemImage: "ferry.fill", coordinate: vessel.coordinate)
-                        .tint(.green)
-                }
-            }
-            .overlay(alignment: .bottom) {
-                Text(status)
-                    .font(.footnote)
-                    .padding(8)
-                    .background(.black.opacity(0.6), in: Capsule())
-                    .foregroundStyle(.white)
-                    .padding(.bottom, 12)
-            }
-            .navigationTitle("Ships on the River")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
-            }
-            .task { await pollLoop() }
-        }
-    }
-
-    private func pollLoop() async {
-        while !Task.isCancelled {
-            await fetchOnce()
-            try? await Task.sleep(for: .seconds(30))
-        }
-    }
-
-    private func fetchOnce() async {
-        guard let url = URL(string: apiBase + "/vessels") else { return }
-        do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            let resp = try JSONDecoder().decode(VesselResponse.self, from: data)
-            vessels = resp.vessels
-            status = "\(resp.vessels.count) vessel\(resp.vessels.count == 1 ? "" : "s") nearby · updated just now"
-        } catch {
-            status = "Couldn't reach the ship feed."
-        }
-    }
-}
 
 #Preview {
     ContentView()

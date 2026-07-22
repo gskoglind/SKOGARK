@@ -22,20 +22,11 @@
     const sceneLayers = [document.getElementById("sceneA"), document.getElementById("sceneB")];
     const locationFlash = document.getElementById("locationFlash");
     const catSprite = document.getElementById("catSprite");
-    const shipsButton = document.getElementById("shipsButton");
-    const shipsOverlay = document.getElementById("shipsOverlay");
-    const shipsClose = document.getElementById("shipsClose");
-    const shipsMapEl = document.getElementById("shipsMap");
-    const shipsStatus = document.getElementById("shipsStatus");
     const camsButton = document.getElementById("camsButton");
     const camsOverlay = document.getElementById("camsOverlay");
     const camsClose = document.getElementById("camsClose");
     const camsSelect = document.getElementById("camsSelect");
     const camsFrame = document.getElementById("camsFrame");
-
-    // Optional live-ships feature: the URL of the AIS proxy (see server/). When
-    // unset, the "Ships" button and the in-narration ship name stay disabled.
-    const VESSEL_API = (window.SKOGARK_VESSEL_API || "").replace(/\/$/, "") || null;
 
     // Image files for the web app, loaded from web/images/. Each room maps to a
     // base name; the "_landscape" / "_portrait" variant is chosen at runtime to
@@ -422,86 +413,6 @@
     let lastSceneKey = null;  // room + lit state, so the backdrop reacts to light
     let flashTimer = null;
 
-    // ---- Live ships map (optional, gated on VESSEL_API) ----
-    let shipsMap = null;
-    let shipsMarkers = null;
-    let shipsTimer = null;
-    let announcedMMSIs = new Set(); // vessels Captain Mike has already called out
-    let lastShipLeg = null;         // so we announce at most once per cruise leg
-
-    function ensureShipsMap() {
-        if (shipsMap || !window.L) return;
-        shipsMap = L.map(shipsMapEl).setView([32.083, -81.09], 13); // downtown / port
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            maxZoom: 18,
-            attribution: "&copy; OpenStreetMap contributors",
-        }).addTo(shipsMap);
-        shipsMarkers = L.layerGroup().addTo(shipsMap);
-    }
-
-    async function pollVessels() {
-        if (!VESSEL_API) return;
-        try {
-            const res = await fetch(VESSEL_API + "/vessels", { cache: "no-store" });
-            const data = await res.json();
-            const list = data.vessels || [];
-            if (shipsMarkers) {
-                shipsMarkers.clearLayers();
-                for (const v of list) {
-                    const speed = (typeof v.sog === "number") ? `${v.sog.toFixed(1)} kn` : "—";
-                    L.circleMarker([v.lat, v.lon], {
-                        radius: 5, color: "#4ade80", weight: 1,
-                        fillColor: "#4ade80", fillOpacity: 0.8,
-                    })
-                        .bindPopup(`<strong>${v.name || "Unknown vessel"}</strong><br>${v.kind || "vessel"} · ${speed}`)
-                        .addTo(shipsMarkers);
-                }
-            }
-            shipsStatus.textContent = `${list.length} vessel${list.length === 1 ? "" : "s"} nearby · updated just now`;
-        } catch (e) {
-            shipsStatus.textContent = "Couldn't reach the ship feed.";
-        }
-    }
-
-    function openShips() {
-        if (!VESSEL_API) return;
-        shipsOverlay.hidden = false;
-        ensureShipsMap();
-        if (shipsMap) setTimeout(() => shipsMap.invalidateSize(), 50); // resize after unhide
-        pollVessels();
-        clearInterval(shipsTimer);
-        shipsTimer = setInterval(pollVessels, 30000);
-    }
-
-    function closeShips() {
-        shipsOverlay.hidden = true;
-        clearInterval(shipsTimer);
-        shipsTimer = null;
-    }
-
-    // As the boat passes the working river, Captain Mike names a real ship that
-    // is out there right now (best-effort; network hiccups are ignored).
-    // A cruise leg id, e.g. "riverD4" -> "river" (the dock and fort have none).
-    function legOf(roomID) { return roomID.replace(/D\d+$/, ""); }
-
-    async function maybeAnnounceShip() {
-        if (!VESSEL_API || !game || game.scenario.id !== "riverboat") return;
-        const legs = ["river", "port", "bridge", "city", "waving"];
-        const leg = legOf(game.roomID);
-        if (!legs.includes(leg) || leg === lastShipLeg) return; // once per leg
-        lastShipLeg = leg;
-        try {
-            const res = await fetch(VESSEL_API + "/vessels", { cache: "no-store" });
-            const data = await res.json();
-            const fresh = (data.vessels || []).filter((v) => v.name && !announcedMMSIs.has(v.mmsi));
-            if (!fresh.length) return;
-            const v = fresh[0];
-            announcedMMSIs.add(v.mmsi);
-            game.emit(`Captain Mike: "Off to the side, the ${v.name} — a ${v.kind || "vessel"} on the river with us."`);
-            render();
-        } catch (e) { /* keep the tour flowing regardless */ }
-    }
-
     // ---- Live webcams (SavannahCams HLS feeds, embedded by iframe) ----
     const CAM_BASE = "https://www.savannahcams.com/streams/cam_";
     const RIVER_CAMS = [
@@ -619,13 +530,8 @@
         game = new Game(scenario);
         rendered = 0;
         lastRoomID = null;
-        announcedMMSIs = new Set();
-        lastShipLeg = null;
         transcriptEl.textContent = "";
         gameTitle.textContent = scenario.title;
-        // The live-ships map only makes sense on the riverboat, and only when a
-        // proxy URL is configured.
-        shipsButton.hidden = !(VESSEL_API && scenario.id === "riverboat");
         camsButton.hidden = scenario.id !== "riverboat";
         menuEl.hidden = true;
         gameEl.hidden = false;
@@ -641,7 +547,6 @@
         menuEl.hidden = false;
         game = null;
         stopSpeaking();
-        closeShips();
         closeCams();
         clearScene();
         if (actionBar) actionBar.textContent = "";
@@ -897,7 +802,6 @@
         game.process(cmd);
         render();
         updateScene();
-        maybeAnnounceShip();
         renderActions();
     }
 
@@ -912,7 +816,6 @@
         game.process(value);
         render();
         updateScene();
-        maybeAnnounceShip();
         renderActions();
         input.focus();
     });
@@ -935,8 +838,6 @@
         renderActions();
         input.focus();
     });
-    shipsButton.addEventListener("click", openShips);
-    shipsClose.addEventListener("click", closeShips);
     camsButton.addEventListener("click", openCams);
     camsClose.addEventListener("click", closeCams);
     camsSelect.addEventListener("change", () => showCam(camsSelect.value));
