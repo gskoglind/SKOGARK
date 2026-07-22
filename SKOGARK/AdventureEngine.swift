@@ -224,6 +224,19 @@ final class Game {
     func isCarrying(_ id: String) -> Bool { inventory.contains(id) }
     func isCarrying(kind: String) -> Bool { inventory.contains { items[$0]?.kind == kind } }
 
+    // UI-facing views of the world, for the tap-action chips.
+    var currentRoomItemIDs: [String] { rooms[currentRoomID]?.items ?? [] }
+    var carriedItemIDs: [String] { inventory }
+    /// The obvious exits paired with their destination titles, for movement
+    /// chips labelled by where they lead.
+    func obviousExitsWithTitles() -> [(direction: Direction, title: String)] {
+        guard let room = rooms[currentRoomID] else { return [] }
+        return obviousExits().map { direction in
+            let destination = room.exits[direction].flatMap { rooms[$0] }
+            return (direction, destination?.title ?? direction.rawValue.capitalized)
+        }
+    }
+
     // MARK: Input Handling
 
     /// The single public entry point: process one line of player input.

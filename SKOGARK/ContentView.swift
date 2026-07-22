@@ -204,6 +204,8 @@ struct GameView: View {
             Divider()
             transcriptView
             Divider()
+            actionBar
+            Divider()
             inputBar
         }
         .background(Color.black)
@@ -508,6 +510,165 @@ struct GameView: View {
         case "blackheath":     return "bg_greenwich_blackheath"
         default:            return nil
         }
+    }
+
+    // MARK: Tap-action chips (a hybrid layer over the parser)
+
+    /// One tap-action chip: a label and the command it feeds the parser.
+    private struct Chip: Identifiable {
+        enum Style { case move, act, give, look, util }
+        let id = UUID()
+        let label: String
+        let cmd: String
+        let style: Style
+    }
+
+    /// One-tap "special" interactions keyed by item id, for verbs the parser
+    /// routes to the object handler. Mirrors the web app's table.
+    private static let specialByID: [String: (label: String, cmd: String)] = [
+        "bellGeronimos": ("🔔 Ring the bell", "ring bell"),
+        "bellMogambos": ("🔔 Ring the bell", "ring bell"),
+        "bellQuest": ("🔔 Ring the bell", "ring bell"),
+        "dartboard": ("🎯 Throw darts", "throw darts"),
+        "jukebox": ("🎵 Jukebox", "play jukebox"),
+        "fareMachine": ("Settle the fare", "push machine"),
+        "meridian": ("Straddle the line", "straddle line"),
+        "rug": ("Move the rug", "move rug"),
+        "cannonCruise": ("⚓ Board the Cannon Cruise", "board cannon"),
+        "afternoonCruise": ("⚓ Board the Afternoon Cruise", "board afternoon"),
+        "sunsetCruise": ("⚓ Board the Sunset Cruise", "board sunset"),
+    ]
+    /// Carried items with a natural one-tap verb, keyed by item KIND —
+    /// bought copies get minted ids like "beer#0", so ids won't match.
+    private static let invSpecialByKind: [String: (label: String, cmd: String)] = [
+        "beer": ("Drink the beer", "drink beer"),
+    ]
+
+    /// The chips for the current turn, rebuilt from room state on every
+    /// engine change (the view recomputes whenever the game mutates).
+    private var chips: [Chip] {
+        if game.isWon { return [Chip(label: "↺ Play again", cmd: "restart", style: .util)] }
+        var chips: [Chip] = []
+        let dark = !game.canSeeRoom
+
+        // Movement — labelled with the destination room's name. Hidden in
+        // the dark so unlit rooms don't leak the map.
+        if !dark {
+            for exit in game.obviousExitsWithTitles() {
+                chips.append(Chip(label: "→ \(exit.title)", cmd: exit.direction.rawValue, style: .move))
+            }
+        }
+
+        // Actions on what's in the room (skipped in the dark).
+        var sawSeat = false
+        let roomItemIDs = game.currentRoomItemIDs
+        if !dark {
+            for id in roomItemIDs {
+                guard let item = game.item(id) else { continue }
+                let noun = item.nouns.first ?? item.name
+                if let special = Self.specialByID[id] {
+                    chips.append(Chip(label: special.label, cmd: special.cmd, style: .act))
+                } else if item.isCreature {
+                    chips.append(Chip(label: "💬 Talk to \(item.name)", cmd: "talk to \(noun)", style: .act))
+                } else if item.forSale {
+                    chips.append(Chip(label: "Buy \(item.name) · \(item.price)", cmd: "buy \(noun)", style: .act))
+                } else if item.isTakeable {
+                    chips.append(Chip(label: "Take \(item.name)", cmd: "take \(noun)", style: .act))
+                } else if item.kind == "seat" {
+                    sawSeat = true
+                } else if item.isFixture {
+                    chips.append(Chip(label: "Look at \(item.name)", cmd: "examine \(noun)", style: .look))
+                }
+                if item.readText != nil {
+                    chips.append(Chip(label: "Read \(item.name)", cmd: "read \(noun)", style: .look))
+                }
+                // Doors, windows, and containers — required in the house.
+                if item.isOpenable {
+                    chips.append(Chip(label: "\(item.isOpen ? "Close" : "Open") \(item.name)",
+                                      cmd: "\(item.isOpen ? "close" : "open") \(noun)", style: .act))
+                }
+            }
+            // Put a carried item into any open container in the room
+            // (the trophy case, the summit postbox); the engine validates.
+            for contID in roomItemIDs {
+                guard let cont = game.item(contID), cont.isContainer, cont.isOpen else { continue }
+                let cnoun = cont.nouns.first ?? cont.name
+                for carriedID in game.carriedItemIDs {
+                    guard let carried = game.item(carriedID) else { continue }
+                    let gnoun = carried.nouns.first ?? carried.name
+                    chips.append(Chip(label: "Put \(carried.name) → \(cont.name)",
+                                      cmd: "put \(gnoun) in \(cnoun)", style: .give))
+                }
+            }
+            // Give any carried item to any creature present; the engine validates.
+            let creatures = roomItemIDs.compactMap { game.item($0) }.filter(\.isCreature)
+            if !creatures.isEmpty {
+                for carriedID in game.carriedItemIDs {
+                    guard let carried = game.item(carriedID) else { continue }
+                    let gnoun = carried.nouns.first ?? carried.name
+                    for creature in creatures {
+                        let cnoun = creature.nouns.first ?? creature.name
+                        chips.append(Chip(label: "Give \(carried.name) → \(creature.name)",
+                                          cmd: "give \(gnoun) to \(cnoun)", style: .give))
+                    }
+                }
+            }
+        }
+
+        // Carried one-tap verbs (e.g. drink the beer at the viewpoint).
+        for id in game.carriedItemIDs {
+            if let kind = game.item(id)?.kind, let special = Self.invSpecialByKind[kind] {
+                chips.append(Chip(label: special.label, cmd: special.cmd, style: .act))
+            }
+        }
+        // Light sources, carried or in the room — shown even in the dark:
+        // turning the lamp on is exactly what a dark room needs.
+        for id in game.carriedItemIDs + roomItemIDs {
+            guard let item = game.item(id), item.isLightSource else { continue }
+            chips.append(Chip(label: "\(item.isLit ? "Turn off" : "🔦 Turn on") \(item.name)",
+                              cmd: "turn \(item.isLit ? "off" : "on")", style: .act))
+        }
+        if sawSeat { chips.append(Chip(label: "Sit", cmd: "sit", style: .act)) }
+
+        // Utility, quietly at the end.
+        chips.append(Chip(label: "👁 Look", cmd: "look", style: .util))
+        chips.append(Chip(label: "🎒 Items", cmd: "inventory", style: .util))
+        return chips
+    }
+
+    private func chipColor(_ style: Chip.Style) -> Color {
+        switch style {
+        case .move: return .green
+        case .give: return Color(red: 0.96, green: 0.76, blue: 0.47)
+        case .util: return Color(white: 0.6)
+        case .act, .look: return Color(white: 0.9)
+        }
+    }
+
+    /// A horizontally scrollable row of one-tap commands, built fresh from
+    /// room state each turn. Typing still works exactly as before.
+    private var actionBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(chips) { chip in
+                    Button {
+                        game.process(chip.cmd)
+                    } label: {
+                        Text(chip.label)
+                            .font(.system(.footnote, design: .monospaced))
+                            .foregroundStyle(chipColor(chip.style))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color(white: 0.11), in: Capsule())
+                            .overlay(Capsule().strokeBorder(chipColor(chip.style).opacity(0.35), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+        .background(Color.black)
     }
 
     private var titleBar: some View {
