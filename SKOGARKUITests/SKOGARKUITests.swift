@@ -16,18 +16,25 @@ final class SKOGARKUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    /// Taps the action chip that emits `cmd`, swiping the chip row as needed
-    /// to bring it on screen.
+    /// Taps the action chip that emits `cmd`, swiping the chip ROW (not the
+    /// whole screen) to bring it into view when needed.
     @MainActor
     private func tapChip(_ cmd: String, in app: XCUIApplication) {
         let chip = app.buttons["chip:\(cmd)"]
         XCTAssertTrue(chip.waitForExistence(timeout: 5), "Missing chip for '\(cmd)'")
+        let bar = app.scrollViews["actionBar"].firstMatch
         var swipes = 0
-        while !chip.isHittable && swipes < 6 {
-            app.swipeLeft(velocity: .fast)
+        while !chip.isHittable && swipes < 8 {
+            (bar.exists ? bar : app).swipeLeft(velocity: .fast)
             swipes += 1
         }
-        chip.tap()
+        if chip.isHittable {
+            chip.tap()
+        } else {
+            // Last resort: tap the element's center even if XCUI can't
+            // compute an activation point for the partially clipped frame.
+            chip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
     }
 
     // MARK: - The destination menu

@@ -15,19 +15,34 @@ import WebKit
 /// game returns here to choose again.
 struct ContentView: View {
     @State private var game: Game? = nil
+    @State private var store = Store()
+    @State private var paywall: PaywallRequest? = nil
+
+    /// Identifiable wrapper so a locked destination can drive a sheet.
+    private struct PaywallRequest: Identifiable {
+        let id = UUID()
+        let destination: String
+    }
 
     var body: some View {
         Group {
             if let game {
                 GameView(game: game, onExitToMenu: { self.game = nil })
             } else {
-                MenuView(onSelect: { scenario in
-                    self.game = Game(scenario: scenario)
+                MenuView(store: store, onSelect: { scenario in
+                    if store.isUnlocked(scenario.destination) {
+                        self.game = Game(scenario: scenario)
+                    } else {
+                        paywall = PaywallRequest(destination: scenario.destination)
+                    }
                 })
             }
         }
         .background(Color.black)
         .preferredColorScheme(.dark)
+        .sheet(item: $paywall) { request in
+            PaywallView(store: store, destination: request.destination)
+        }
         .onAppear { runShotArgumentIfPresent() }
     }
 
@@ -49,6 +64,7 @@ struct ContentView: View {
 
 /// The two-step chooser: pick a destination, then one of its adventures.
 struct MenuView: View {
+    let store: Store
     let onSelect: (Scenario) -> Void
     @State private var destination: String? = nil
 
@@ -153,6 +169,19 @@ struct MenuView: View {
             RoundedRectangle(cornerRadius: 12)
                 .strokeBorder(Color(white: 0.25), lineWidth: 1)
         )
+        // Premium destinations wear the ticket badge until it's bought.
+        .overlay(alignment: .topTrailing) {
+            if !store.isUnlocked(name) {
+                Label("Ticket", systemImage: "lock.fill")
+                    .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.yellow.opacity(0.92), in: Capsule())
+                    .padding(8)
+                    .accessibilityLabel("Requires the Round-the-World Ticket")
+            }
+        }
     }
 
     private func scenarioCard(_ scenario: Scenario) -> some View {
@@ -522,10 +551,12 @@ struct GameView: View {
     /// One tap-action chip: a label and the command it feeds the parser.
     private struct Chip: Identifiable {
         enum Style { case move, act, give, look, util }
-        let id = UUID()
         let label: String
         let cmd: String
         let style: Style
+        /// Stable identity across view rebuilds — a fresh UUID per rebuild
+        /// made accessibility elements go stale under automation.
+        var id: String { "\(label)|\(cmd)" }
 
         /// What VoiceOver speaks: the label minus decorations — no emoji,
         /// and movement arrows become the word "Go to".
@@ -695,6 +726,7 @@ struct GameView: View {
             .padding(.vertical, 6)
         }
         .background(Color.black)
+        .accessibilityIdentifier("actionBar")
     }
 
     private var titleBar: some View {

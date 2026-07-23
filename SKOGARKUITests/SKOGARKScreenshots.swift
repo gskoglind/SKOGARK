@@ -20,6 +20,7 @@ final class SKOGARKScreenshots: XCTestCase {
     private func launch() -> XCUIApplication {
         let app = XCUIApplication()
         setupSnapshot(app)
+        app.launchArguments += ["-unlockAll"]   // screenshots show the full atlas
         app.launch()
         XCTAssertTrue(app.buttons["destination:Sydney"].waitForExistence(timeout: 20),
                       "Menu never appeared")
@@ -30,12 +31,17 @@ final class SKOGARKScreenshots: XCTestCase {
     private func tap(_ id: String, in app: XCUIApplication) {
         let element = app.buttons[id]
         XCTAssertTrue(element.waitForExistence(timeout: 20), "Missing element: \(id)")
+        let bar = app.scrollViews["actionBar"].firstMatch
         var swipes = 0
-        while !element.isHittable && swipes < 6 {
-            app.swipeLeft(velocity: .fast)
+        while !element.isHittable && swipes < 8 {
+            (bar.exists ? bar : app).swipeLeft(velocity: .fast)
             swipes += 1
         }
-        element.tap()
+        if element.isHittable {
+            element.tap()
+        } else {
+            element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
     }
 
     /// Opens a scenario from the menu and waits for the game to be ready.

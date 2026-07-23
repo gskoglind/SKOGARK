@@ -1,0 +1,38 @@
+{
+  "identifier" : "8C1B2E7A-0000-4000-9000-5B0GA4K00001",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : true,
+      "internalID" : "8C1B2E7A-0000-4000-9000-5B0GA4K00002",
+      "localizations" : [
+        {
+          "description" : "Unlock Japan, London, Sydney — and every destination still to come.",
+          "displayName" : "Round-the-World Ticket",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.gskoglind.skogark.roundtheworld",
+      "referenceName" : "Round-the-World Ticket",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}
