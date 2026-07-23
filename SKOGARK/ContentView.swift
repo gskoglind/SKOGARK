@@ -896,7 +896,7 @@ final class SoundEffects {
     private init() {
         boom = SoundEffects.makeBoom(format: format)
         engine.attach(player)
-        try? engine.connectNode(player, to: engine.mainMixerNode, format: format)
+        engine.connect(player, to: engine.mainMixerNode, format: format)
     }
 
     /// Plays a deep cannon boom. Best-effort: silently does nothing if the audio
@@ -906,7 +906,7 @@ final class SoundEffects {
         player.scheduleBuffer(boom, at: nil, options: .interrupts, completionHandler: nil)
         do {
             if !engine.isRunning { try engine.start() }
-            try player.playAudio()
+            player.play()
         } catch {
             return
         }
