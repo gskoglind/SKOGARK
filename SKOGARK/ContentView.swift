@@ -28,6 +28,22 @@ struct ContentView: View {
         }
         .background(Color.black)
         .preferredColorScheme(.dark)
+        .onAppear { runShotArgumentIfPresent() }
+    }
+
+    /// Screenshot rig: `-uiShot "<scenarioID>|<cmd>|<cmd>…"` launches straight
+    /// into a scenario and replays the commands, so `simctl launch` + a plain
+    /// screenshot can capture any scene with no UI automation involved.
+    /// (Used by the App Store screenshot pipeline; inert otherwise.)
+    private func runShotArgumentIfPresent() {
+        let args = ProcessInfo.processInfo.arguments
+        guard let flag = args.firstIndex(of: "-uiShot"), args.indices.contains(flag + 1) else { return }
+        let parts = args[flag + 1].split(separator: "|").map(String.init)
+        guard let first = parts.first,
+              let scenario = Game.scenarios.first(where: { $0.id == first }) else { return }
+        let staged = Game(scenario: scenario)
+        for command in parts.dropFirst() { staged.process(command) }
+        game = staged
     }
 }
 
@@ -675,7 +691,6 @@ struct GameView: View {
             Button {
                 narrator.stop()
                 game.process("hint")
-                inputFocused = true
             } label: {
                 Image(systemName: "lightbulb.fill").font(.subheadline)
             }
@@ -752,7 +767,8 @@ struct GameView: View {
         }
         .padding()
         .background(Color.black.opacity(0.55))
-        .onAppear { inputFocused = true }
+        // No auto-focus on game start: tap-first players never see the
+        // keyboard, and typists get it the moment they tap the field.
     }
 
     private func submit() {
@@ -760,7 +776,7 @@ struct GameView: View {
         command = ""
         narrator.stop() // cut off any narration still playing from the last turn
         game.process(entered)
-        inputFocused = true
+        inputFocused = true   // typists keep the keyboard between commands
     }
 }
 
