@@ -67,8 +67,9 @@ struct MenuView: View {
 
             VStack(spacing: 8) {
                 Text("SKOGARK")
-                    .font(.system(size: 40, weight: .bold, design: .monospaced))
+                    .font(.system(.largeTitle, design: .monospaced).weight(.bold))
                     .foregroundStyle(.green)
+                    .accessibilityAddTraits(.isHeader)
                 Text(destination ?? "Tiny text adventures. Where to?")
                     .font(.system(.subheadline, design: .monospaced))
                     .foregroundStyle(Color(white: 0.6))
@@ -118,16 +119,18 @@ struct MenuView: View {
     private func destinationCard(_ name: String) -> some View {
         let count = Game.scenarios.filter { $0.destination == name }.count
         return ZStack(alignment: .bottomLeading) {
+            // The art fills whatever height the text needs (Dynamic Type can
+            // grow the card past its 110-point floor).
             if let asset = Self.destinationArt(name), let image = UIImage(named: asset) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(height: 110)
-                    .clipped()
-                    .overlay(LinearGradient(colors: [.clear, .black.opacity(0.75)],
-                                            startPoint: .top, endPoint: .bottom))
+                Color.clear.overlay(
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                )
+                .overlay(LinearGradient(colors: [.clear, .black.opacity(0.75)],
+                                        startPoint: .top, endPoint: .bottom))
             } else {
-                Color(white: 0.10).frame(height: 110)
+                Color(white: 0.10)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
@@ -138,6 +141,7 @@ struct MenuView: View {
                     .foregroundStyle(Color(white: 0.8))
             }
             .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 110, alignment: .bottomLeading)
         }
         .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -277,6 +281,8 @@ struct GameView: View {
         }
         .padding(.top, 12)
         .allowsHitTesting(false)
+        // The transcript announces arrivals in prose; the flash is decoration.
+        .accessibilityHidden(true)
     }
 
     /// Shows the arrival card for `title`, cancelling any card still on screen
@@ -328,8 +334,10 @@ struct GameView: View {
         // its frame — .clipped() trims the drawing but NOT hit testing, so
         // without this the invisible overflow swallows taps on the title bar
         // (the Menu/Hint/Voice buttons). Mirrors the web pane's
-        // pointer-events: none.
+        // pointer-events: none. Hidden from VoiceOver for the same reason:
+        // the transcript carries the scene in prose.
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
         // Animate whenever the room OR its lit state changes, so lighting the
         // lantern in the cellar cross-fades from dark to the egg-lit view.
         .animation(.easeInOut(duration: 0.4), value: sceneKey)
@@ -359,6 +367,7 @@ struct GameView: View {
             }
         }
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
         .animation(.easeInOut(duration: 0.4), value: game.roomID)
     }
 
@@ -517,6 +526,16 @@ struct GameView: View {
         let label: String
         let cmd: String
         let style: Style
+
+        /// What VoiceOver speaks: the label minus decorations — no emoji,
+        /// and movement arrows become the word "Go to".
+        var spokenLabel: String {
+            let cleaned = label.unicodeScalars
+                .filter { !$0.properties.isEmojiPresentation && $0 != "→" && $0 != "↺" }
+                .reduce(into: "") { $0.unicodeScalars.append($1) }
+                .trimmingCharacters(in: .whitespaces)
+            return style == .move ? "Go to \(cleaned)" : cleaned
+        }
     }
 
     /// One-tap "special" interactions keyed by item id, for verbs the parser
@@ -669,6 +688,7 @@ struct GameView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("chip:\(chip.cmd)")
+                    .accessibilityLabel(chip.spokenLabel)
                 }
             }
             .padding(.horizontal, 12)
@@ -754,6 +774,7 @@ struct GameView: View {
             Text(">")
                 .font(.system(.body, design: .monospaced))
                 .foregroundStyle(.green)
+                .accessibilityHidden(true)
             TextField("What do you do?", text: $command)
                 .font(.system(.body, design: .monospaced))
                 .foregroundStyle(.green)
