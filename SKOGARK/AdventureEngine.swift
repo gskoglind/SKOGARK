@@ -178,8 +178,10 @@ final class Game {
     private var hintLevel = 0
     private var hintStageKey = ""
 
-    /// All playable scenarios, for the selection menu.
-    static let scenarios: [Scenario] = [houseScenario(), townScenario(), riverboatScenario(), fortPulaskiScenario(), roppongiScenario(), fujiScenario(), greenwichScenario(), sydneyScenario()]
+    /// All playable scenarios, for the selection menu. Roppongi is web-only:
+    /// App Review flagged its content for the iOS age rating, so it stays out
+    /// of this list (the scenario code remains for engine parity with web/).
+    static let scenarios: [Scenario] = [houseScenario(), townScenario(), riverboatScenario(), fortPulaskiScenario(), fujiScenario(), greenwichScenario(), sydneyScenario()]
 
     convenience init() { self.init(scenario: Game.houseScenario()) }
 
@@ -2218,7 +2220,7 @@ extension Game {
         // The eight marks of a perfect Greenwich afternoon; the walk home to
         // Blackheath, with all of them done, is the win.
         let stops = ["sawCutty", "sawMuseum", "straddled",
-                     "spotCanary", "spotO2", "spotEye", "fedSquirrel", "hadBeer"]
+                     "spotCanary", "spotO2", "spotEye", "fedSquirrel", "hadDrink"]
         let finishIfDone: (Game) -> Void = { game in
             guard stops.allSatisfy({ game.has(flag: $0) }), !game.has(flag: "readyHome") else { return }
             game.set(flag: "readyHome")
@@ -2266,19 +2268,19 @@ extension Game {
                 }
             },
             onMoveObject: { game, id in
-                // DRINK BEER — but only where it belongs: on the bench.
-                if game.item(id)?.kind == "beer" {
+                // DRINK the kiosk drink — but only where it belongs: on the bench.
+                if game.item(id)?.kind == "drink" {
                     if game.roomID != "wolfeViewpoint" {
-                        game.emit("Not yet. This beer has exactly one correct location — the bench at the top of the park. It's the law of the hill.")
+                        game.emit("Not yet. This drink has exactly one correct location — the bench at the top of the park. It's the law of the hill.")
                         return true
                     }
-                    if game.has(flag: "hadBeer") {
+                    if game.has(flag: "hadDrink") {
                         game.emit("The empty can is already crackling contentedly beside you on the bench.")
                         return true
                     }
                     game.consumeFromInventory(id)
-                    game.set(flag: "hadBeer")
-                    game.award(10, "You crack the can — that first pssht doing exactly what it always does — and settle back on the bench with the whole city arranged below. Cold beer, warm light, squirrels auditing the area, London politely getting on without you. Whoever invented this routine deserves a statue next to Wolfe's.")
+                    game.set(flag: "hadDrink")
+                    game.award(10, "You crack the can — that first pssht doing exactly what it always does — and settle back on the bench with the whole city arranged below. Cold drink, warm light, squirrels auditing the area, London politely getting on without you. Whoever invented this routine deserves a statue next to Wolfe's.")
                     finishIfDone(game)
                     return true
                 }
@@ -2365,7 +2367,7 @@ extension Game {
                     }
                 case "blackheath":
                     if stops.allSatisfy({ game.has(flag: $0) }), !game.isWon {
-                        game.win("You finish the last of the light on the long diagonal across the park, give the squirrel sentry at the gate a nod of colleagues parting, and come out onto the heath — wide, flat, and gold, a kite or two up, the village lights coming on across the grass. Home to Blackheath, the long way round: the ship, the coat, the line, the view, the squirrel, the beer on the bench. The perfect commute, door to door. Kettle on.")
+                        game.win("You finish the last of the light on the long diagonal across the park, give the squirrel sentry at the gate a nod of colleagues parting, and come out onto the heath — wide, flat, and gold, a kite or two up, the village lights coming on across the grass. Home to Blackheath, the long way round: the ship, the coat, the line, the view, the squirrel, the drink on the bench. The perfect commute, door to door. Kettle on.")
                     } else if !game.isWon {
                         game.emit("The heath opens ahead and home is just across it — but the afternoon isn't finished with you yet. The park, the bench, and the rest of the ritual are back NORTH. (HINT knows what's left.)")
                     }
@@ -2410,12 +2412,12 @@ extension Game {
                             : "BUY NUTS at the park kiosk (back down the hill), then GIVE a NUT TO the SQUIRREL at the bench.",
                     ])
                 }
-                if !game.has(flag: "hadBeer") {
-                    return (key: "beer", clues: [
+                if !game.has(flag: "hadDrink") {
+                    return (key: "drink", clues: [
                         "One bench tradition remains to be honoured.",
-                        game.inventoryKinds().contains("beer")
-                            ? "DRINK the BEER — you're in exactly the right place."
-                            : "BUY a BEER at the park kiosk, carry it up the hill, and DRINK it on the bench.",
+                        game.inventoryKinds().contains("drink")
+                            ? "DRINK your DRINK — you're in exactly the right place."
+                            : "BUY a DRINK at the park kiosk, carry it up the hill, and DRINK it on the bench.",
                     ])
                 }
                 return (key: "home", clues: [
@@ -2439,13 +2441,13 @@ extension Game {
         // up the hill by bus from the Neutral Bay wharf — is the win.
         let stops = ["boardedManly", "spotOpera", "spotBridge", "spotDenison",
                      "crossedHeads", "sawBeach", "ateChips", "sunsetReturn",
-                     "sawBalmoral", "underBridge", "playedCraps"]
+                     "sawBalmoral"]
         let dayDone: (Game) -> Bool = { game in stops.allSatisfy { game.has(flag: $0) } }
         return Scenario(
             id: "sydney",
             title: "Sydney Harbour Ferries",
             destination: "Sydney",
-            blurb: "A day riding the ferries from Circular Quay: past the Opera House and out through the heads on the big Manly boat, under the Bridge on the casino run to Darling Harbour, across to quiet Balmoral, fish and chips among the gulls — then the last ritual: the little Neutral Bay ferry, the bus up the hill, and a schooner at The Oaks.",
+            blurb: "A day riding the ferries from Circular Quay: past the Opera House and out through the heads on the big Manly boat, across to quiet Balmoral, fish and chips among the gulls — then the last ritual: the little Neutral Bay ferry, the bus up the hill, and a schooner at The Oaks.",
             banner: """
             SYDNEY HARBOUR
             A day on the ferries from Circular Quay. (c) 2026
@@ -2453,7 +2455,7 @@ extension Game {
             ─────────────────────────────
             """,
             startRoomID: "circularQuay",
-            maxScore: 60,
+            maxScore: 55,
             startingCoins: 20,
             build: buildSydneyWorld,
             portalGate: { game, direction in
@@ -2463,7 +2465,7 @@ extension Game {
                     return "The Opal gate flashes red and stays shut — no tap, no travel. TAKE an OPAL CARD from the machine by the gates first."
                 }
                 if direction == .east, !dayDone(game) {
-                    return "The deckhand on the little Neutral Bay boat gives you a look. \"Homeward already? Make a day of it first — the big Manly boat's at Wharf 3, the casino run goes under the Bridge, and the Balmoral boat's just along the quay. Plenty of ferries home tonight.\""
+                    return "The deckhand on the little Neutral Bay boat gives you a look. \"Homeward already? Make a day of it first — the big Manly boat's at Wharf 3, and the Balmoral boat's just along the quay. Plenty of ferries home tonight.\""
                 }
                 return nil
             },
@@ -2471,7 +2473,6 @@ extension Game {
                 switch (game.roomID, id) {
                 case ("circularQuay", "manlyFerry"): return .north
                 case ("circularQuay", "balmoralFerry"): return .west
-                case ("circularQuay", "casinoFerry"): return .south
                 case ("circularQuay", "nbFerry"): return .east
                 case ("manlyWharf", "returnFerry"): return .south
                 case ("nbWharf", "bus"): return .up
@@ -2491,10 +2492,6 @@ extension Game {
                     return game.has(flag: "sawBalmoral")
                         ? "The Balmoral ferry rests along the quay, its morning's work done."
                         : "A little ferry along the quay flies the board for BALMORAL BEACH — the quiet one. (BOARD the BALMORAL ferry for the detour.)"
-                case "casinoFerry":
-                    return game.has(flag: "underBridge")
-                        ? "The Darling Harbour boat is back at its berth, its bridge-ducking done for the hour."
-                        : "The Darling Harbour boat flies the board for STAR CITY — the run that goes right under the Bridge. (BOARD the CASINO ferry.)"
                 case "nbFerry":
                     return dayDone(game)
                         ? "The little Neutral Bay ferry idles at Wharf 4, lights on, waiting to take you home. (BOARD the NEUTRAL BAY ferry.)"
@@ -2516,31 +2513,6 @@ extension Game {
                 }
             },
             onMoveObject: { game, id in
-                // The craps table at Star City: $100 on the pass line, once
-                // per visit — win or lose, the roll is part of the day. The
-                // croupier stakes broke ferry-riders, so the day never stalls.
-                if id == "crapsTable" {
-                    if game.has(flag: "playedCraps") {
-                        game.emit("The croupier tips his head. \"One legendary roll per visit, champ. House policy — named after you.\"")
-                        return true
-                    }
-                    game.set(flag: "playedCraps")
-                    let staked = game.spend(5)
-                    let intro = staked
-                        ? "You change your ferry money at the rail — call it a hundred — and set it on the pass line. The boxman nods, the stickman sends you the dice, and the table goes quiet the way tables do. "
-                        : "You turn out your pockets and the croupier waves it away. \"Ferry crowd? First roll's on Star City.\" A hundred in house chips lands on the pass line, the stickman sends you the dice, and the table goes quiet the way tables do. "
-                    switch Int.random(in: 0..<3) {
-                    case 0:
-                        game.earn(staked ? 10 : 5)
-                        game.emit(intro + "You roll — SEVEN, clean off the come-out. \"Winner, front line winner!\" The pass line pays, the table roars like the Freshwater at the heads, and a woman in sequins you will never see again squeezes your shoulder like family. (You're up — \(game.purse) coins.)")
-                    case 1:
-                        game.earn(staked ? 10 : 5)
-                        game.emit(intro + "EIGHT. \"Point is eight!\" The table settles in behind you, the dice go round twice more with the seven circling like a gull — and then the eight comes back. \"Pass line, pay the line!\" Strangers shake your hand. For one roll of the dice, you were Star City's favourite person. (You're up — \(game.purse) coins.)")
-                    default:
-                        game.emit(intro + "You roll — three. Craps. The croupier's rake is gentle but final, and a hundred dollars departs in roughly seven seconds. The gull at Manly was at least charming about it. Still: this, too, is the complete Star City experience, and nobody can say you didn't play. (You have \(game.purse) coins.)")
-                    }
-                    return true
-                }
                 // DRINK the schooner at The Oaks — the day's last ritual, and
                 // the win.
                 if game.item(id)?.kind == "schooner" {
@@ -2634,13 +2606,6 @@ extension Game {
                     award("sawBeach", 5, "Manly Beach opens out under its long line of Norfolk pines — a mile of gold sand, the surf coming in in ruled lines, board-riders scattered like punctuation, and the lifesavers' flags snapping in the sea breeze. If you're carrying chips, the sand is where they're EATEN. The gulls already know.")
                 case "balmoralBeach":
                     award("sawBalmoral", 5, "The little ferry potters around the point and lands you at Balmoral — the quiet one: flat green harbour water instead of surf, the white rotunda on its lawn, the wooden footbridge out to Rocky Point Island, and morning swimmers doing slow laps between the shark-net buoys. Manly is a celebration; Balmoral is a secret. You keep it a while, then catch the boat back EAST to the Quay.")
-                case "darlingDeck":
-                    award("underBridge", 5, "The Darling Harbour boat swings west out of the Quay and heads straight for the Bridge — and then you're UNDER it: the deck goes shadow-cool for three long heartbeats, the whole sky replaced by girders and half a million rivets, a train hammering over the top like weather. Everyone looks up. Everyone always looks up. Then the sun snaps back on and the boat putters on toward Darling Harbour. (Star City is FORWARD.)")
-                case "starCity":
-                    if !game.has(flag: "sawStarCity") {
-                        game.set(flag: "sawStarCity")
-                        game.emit("The boat ties up at Darling Harbour under the glow of Star City — the casino humming away like a docked spaceship, all carpet and chandeliers and optimism. And there, through the noise, the CRAPS tables are clattering. You know what the ritual demands: PLAY CRAPS — a hundred on the pass line. The boat back to the Quay leaves when you're done.")
-                    }
                 case "returnDeck":
                     award("sunsetReturn", 5, "The ferry home pulls out into a harbour going gold. The heads give one last polite roll, and then the city grows off the bow — the Bridge's arch black against the last light, the Opera House's sails catching the pink of it, ten thousand windows coming on. Everyone on deck goes quiet at about the same time. This is the other famous view, the one the postcards can't do: coming home across the water.")
                 case "nbWharf":
@@ -2704,18 +2669,6 @@ extension Game {
                     return (key: "return", clues: [
                         "The other famous view is the one coming home.",
                         "Head back WEST to Manly Wharf and BOARD the RETURN FERRY.",
-                    ])
-                }
-                if !game.has(flag: "underBridge") {
-                    return (key: "casino", clues: [
-                        "One run goes UNDER the Bridge — you can't call the day done without it.",
-                        "From the Quay, BOARD the CASINO ferry to Star City.",
-                    ])
-                }
-                if !game.has(flag: "playedCraps") {
-                    return (key: "craps", clues: [
-                        "Star City has one more ritual before the boat back.",
-                        "PLAY CRAPS — a hundred on the pass line. Win or lose, you play.",
                     ])
                 }
                 if !game.has(flag: "sawBalmoral") {
@@ -3484,9 +3437,9 @@ private func buildGreenwichWorld() -> (rooms: [String: Room], items: [String: It
     add(Item(id: "iceCream", name: "99 with a Flake", nouns: ["ice", "cream", "99", "flake", "cone"],
              description: "A whippy 99 with a Flake at a jaunty angle — the official ice cream of British childhood, and of anyone sensible since.",
              isTakeable: true, isFixture: true, forSale: true, price: 3, kind: "icecream"))
-    add(Item(id: "beer", name: "cold beer", nouns: ["beer", "can", "lager"],
-             description: "A properly cold can of lager, beaded with condensation. It has an appointment with a bench at the top of the hill.",
-             isTakeable: true, isFixture: true, forSale: true, price: 4, kind: "beer"))
+    add(Item(id: "drink", name: "cold drink", nouns: ["drink", "can", "lemonade", "soda"],
+             description: "A properly cold can of fizzy lemonade, beaded with condensation. It has an appointment with a bench at the top of the hill.",
+             isTakeable: true, isFixture: true, forSale: true, price: 4, kind: "drink"))
     add(Item(id: "kioskLady", name: "kiosk lady", nouns: ["lady", "keeper", "vendor", "kiosk"],
              description: "The kiosk lady, who has watched twenty years of afternoons head up that hill and knows exactly what each of them needs.",
              isFixture: true, isCreature: true))
@@ -3546,9 +3499,9 @@ private func buildGreenwichWorld() -> (rooms: [String: Room], items: [String: It
              exits: [.north: "cuttySark", .south: "parkLawn"],
              items: ["nelsonCoat", "shipModels", "figureheads"]))
     add(Room(id: "parkLawn", title: "Greenwich Park — The Lawn",
-             description: "Through the gates and into the oldest Royal Park in London: broad lawns, dog-walkers, and the hill rising ahead. The kiosk by the path sells hazelnuts, ice cream, and cold beer — provisions for the summit — and keeps free park maps in a rack (TAKE one). The chestnut avenue climbs SOUTH; the museum is back NORTH.",
+             description: "Through the gates and into the oldest Royal Park in London: broad lawns, dog-walkers, and the hill rising ahead. The kiosk by the path sells hazelnuts, ice cream, and cold drinks — provisions for the summit — and keeps free park maps in a rack (TAKE one). The chestnut avenue climbs SOUTH; the museum is back NORTH.",
              exits: [.north: "maritimeMuseum", .south: "chestnutAvenue", .up: "chestnutAvenue"],
-             items: ["kioskLady", "greenwichMap", "nuts", "iceCream", "beer"]))
+             items: ["kioskLady", "greenwichMap", "nuts", "iceCream", "drink"]))
     add(Room(id: "chestnutAvenue", title: "The Chestnut Avenue",
              description: "The path climbs the hill between ancient sweet chestnuts, planted for Charles II and now enormous, twisted, and thoroughly occupied by squirrels. The Observatory crowns the rise ahead — keep climbing SOUTH; the lawn is back NORTH.",
              exits: [.north: "parkLawn", .down: "parkLawn", .south: "observatory", .up: "observatory"],
@@ -3591,8 +3544,6 @@ private func buildSydneyWorld() -> (rooms: [String: Room], items: [String: Item]
              description: "The Freshwater-class Manly ferry at Wharf 3 — four decks, ocean-going bones, green and cream like she's always been. The biggest thing on the harbour that isn't a bridge.", isFixture: true))
     add(Item(id: "balmoralFerry", name: "Balmoral ferry", nouns: ["balmoral", "beach"],
              description: "The little Balmoral boat, board flying for the quiet beach around the point.", isFixture: true))
-    add(Item(id: "casinoFerry", name: "Darling Harbour ferry", nouns: ["casino", "star", "darling", "city"],
-             description: "The Darling Harbour boat — the run that swings west out of the Quay and goes clean under the Harbour Bridge on its way to Star City.", isFixture: true))
     add(Item(id: "nbFerry", name: "Neutral Bay ferry", nouns: ["neutral", "small", "fleet"],
              description: "A little First Fleet-class ferry at Wharf 4, sturdy as a work boot — the Neutral Bay run, seven minutes of the best commute on earth.", isFixture: true))
 
@@ -3645,14 +3596,6 @@ private func buildSydneyWorld() -> (rooms: [String: Room], items: [String: Item]
     add(Item(id: "swimmers", name: "morning swimmers", nouns: ["swimmers", "swimmer", "laps"],
              description: "Swimmers doing unhurried laps between the shark-net buoys, caps bright against the green water, as they have every morning since before anyone can remember.", isFixture: true))
 
-    // Star City.
-    add(Item(id: "crapsTable", name: "craps table", nouns: ["craps", "table", "dice", "pass"],
-             description: "The craps table in full cry — chips stacked like little city skylines, the stickman's patter rolling, and the pass line waiting for exactly one hundred of anyone's dollars.", isFixture: true))
-    add(Item(id: "croupier", name: "croupier", nouns: ["croupier", "dealer", "stickman", "boxman"],
-             description: "The croupier, immaculate, running the table like a tide chart — he has seen every system ever invented lose politely.",
-             isFixture: true, isCreature: true,
-             dialogue: "\"Pass line, table minimum's a hundred,\" the croupier says, not unkindly, sliding the dice your way with the stick. \"Ferry crowd always rolls once. It's practically maritime law.\""))
-
     // The way home: the little ferry, the wharf, the bus, and The Oaks.
     add(Item(id: "locals", name: "locals", nouns: ["locals", "woman", "commuters", "passengers"],
              description: "A handful of locals with grocery bags and folded newspapers — the small-ferry crowd, headed home like always.",
@@ -3675,9 +3618,9 @@ private func buildSydneyWorld() -> (rooms: [String: Room], items: [String: Item]
     func add(_ room: Room) { rooms[room.id] = room }
 
     add(Room(id: "circularQuay", title: "Circular Quay",
-             description: "Circular Quay at mid-morning, the whole harbour's front hall: wharves stacked with ferries, didgeridoo rolling under the announcements, the Bridge over one shoulder and the Opera House down the other. The Opal machine stands by the gates (TAKE a CARD). The big MANLY boat loads at Wharf 3, the CASINO run to Darling Harbour goes under the Bridge, the little BALMORAL boat waits along the quay, and the NEUTRAL BAY boat — the way home, later — idles at Wharf 4.",
-             exits: [.north: "manlyDeck", .west: "balmoralBeach", .south: "darlingDeck", .east: "nbDeck"],
-             items: ["opalMachine", "opalCard", "departureBoard", "buskers", "manlyFerry", "casinoFerry", "balmoralFerry", "nbFerry"]))
+             description: "Circular Quay at mid-morning, the whole harbour's front hall: wharves stacked with ferries, didgeridoo rolling under the announcements, the Bridge over one shoulder and the Opera House down the other. The Opal machine stands by the gates (TAKE a CARD). The big MANLY boat loads at Wharf 3, the little BALMORAL boat waits along the quay, and the NEUTRAL BAY boat — the way home, later — idles at Wharf 4.",
+             exits: [.north: "manlyDeck", .west: "balmoralBeach", .east: "nbDeck"],
+             items: ["opalMachine", "opalCard", "departureBoard", "buskers", "manlyFerry", "balmoralFerry", "nbFerry"]))
     add(Room(id: "manlyDeck", title: "Aboard the Freshwater",
              description: "The open deck of the big Freshwater, rail-side, wind full of salt and sunscreen. The harbour parades past: the OPERA HOUSE, the BRIDGE astern, FORT DENISON on its rock (LOOK at each from the rail). The heads are FORWARD, where the ocean gets in.",
              exits: [.north: "theHeads"],
@@ -3706,14 +3649,6 @@ private func buildSydneyWorld() -> (rooms: [String: Room], items: [String: Item]
              description: "Balmoral: the quiet beach — flat green harbour water, the white rotunda on the lawn, the footbridge out to Rocky Point Island, swimmers doing slow laps inside the net. No surf, no hurry. The boat back to the Quay is EAST.",
              exits: [.east: "circularQuay"],
              items: ["rotunda", "islandBridge", "swimmers"]))
-    add(Room(id: "darlingDeck", title: "Under the Bridge",
-             description: "The Darling Harbour boat's little open stern deck, swinging west out of the Quay with the Harbour Bridge growing until it is the entire sky. Star City is FORWARD.",
-             exits: [.north: "starCity"],
-             items: []))
-    add(Room(id: "starCity", title: "Star City — Darling Harbour",
-             description: "Star City at Darling Harbour — carpet, chandeliers, and optimism, the craps tables clattering under the lights (PLAY CRAPS: table minimum a hundred, pass line open). The boat back to the Quay is FORWARD when the dice are done with you.",
-             exits: [.north: "circularQuay"],
-             items: ["crapsTable", "croupier"]))
     add(Room(id: "nbDeck", title: "The Neutral Bay Boat",
              description: "The little First Fleet ferry, inside cabin warm and bright, a handful of locals with groceries and newspapers. Seven minutes across the dark water. Hayes Street wharf is FORWARD — home.",
              exits: [.north: "nbWharf"],

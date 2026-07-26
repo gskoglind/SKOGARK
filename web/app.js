@@ -118,8 +118,6 @@
         manlyBeach:       "bg_sydney_beach",
         returnDeck:       "bg_sydney_return_deck",
         balmoralBeach:    "bg_sydney_balmoral",
-        darlingDeck:      "bg_sydney_under_bridge",
-        starCity:         "bg_sydney_star_city",
         nbDeck:           "bg_sydney_nb_deck",
         nbWharf:          "bg_sydney_nb_wharf",
         oaksPub:          "bg_sydney_oaks",
@@ -655,16 +653,14 @@
         sunsetCruise:    { label: "⚓ Board the Sunset Cruise",    cmd: "board sunset" },
         manlyFerry:    { label: "⛴ Board the Manly ferry",       cmd: "board manly" },
         balmoralFerry: { label: "⛴ Board the Balmoral ferry",    cmd: "board balmoral" },
-        casinoFerry:   { label: "⛴ Board the casino ferry",      cmd: "board casino" },
         nbFerry:       { label: "⛴ Ferry home to Neutral Bay",   cmd: "board neutral" },
         returnFerry:   { label: "⛴ Ferry back to the Quay",      cmd: "board return" },
         bus:           { label: "🚌 Bus up to The Oaks",          cmd: "board bus" },
-        crapsTable:    { label: "🎲 Craps — $100 on the pass line", cmd: "play craps" },
     };
     // Carried items with a natural one-tap verb, keyed by item KIND — bought
-    // copies get minted ids like "beer#0", so ids won't match here.
+    // copies get minted ids like "drink#0", so ids won't match here.
     const INV_SPECIAL = {
-        beer: { label: "Drink the beer", cmd: "drink beer" },
+        drink: { label: "🥤 Drink the cold drink", cmd: "drink lemonade" },
         chips: { label: "🍟 Eat the fish and chips", cmd: "eat chips" },
         schooner: { label: "🍺 Drink the schooner", cmd: "drink schooner" },
     };
@@ -767,7 +763,7 @@
             }
         }
 
-        // Carried one-tap verbs (e.g. drink the beer at the viewpoint).
+        // Carried one-tap verbs (e.g. drink the lemonade at the viewpoint).
         for (const id of game.inventory) {
             const carried = game.item(id);
             const special = carried && carried.kind && INV_SPECIAL[carried.kind];

@@ -50,8 +50,7 @@ final class SKOGARKUITests: XCTestCase {
         }
 
         app.buttons["destination:Japan"].tap()
-        XCTAssertTrue(app.buttons["scenario:roppongi"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["scenario:fuji"].exists)
+        XCTAssertTrue(app.buttons["scenario:fuji"].waitForExistence(timeout: 5))
 
         app.buttons["All destinations"].tap()
         XCTAssertTrue(app.buttons["destination:Sydney"].waitForExistence(timeout: 5))

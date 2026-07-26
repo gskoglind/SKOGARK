@@ -224,30 +224,27 @@ struct SKOGARKTests {
 
     @Test func greenwichIsTapOnlyCompletable() {
         let game = Game(scenario: Game.greenwichScenario())
-        play(game, ["up", "south", "south", "take map", "buy nuts", "buy beer",
+        play(game, ["up", "south", "south", "take map", "buy nuts", "buy drink",
                     "up", "up", "straddle line", "east",
                     "examine canary", "examine o2", "examine eye",
-                    "give nuts to squirrel", "drink beer", "south"])
+                    "give nuts to squirrel", "drink lemonade", "south"])
         #expect(game.isWon)
         #expect(game.score == game.scenario.maxScore)
     }
 
-    @Test func sydneyIsTapOnlyCompletableWhateverTheDice() {
-        for _ in 0..<8 {
-            let game = Game(scenario: Game.sydneyScenario())
-            play(game, ["take card", "board manly",
-                        "examine opera", "examine bridge", "examine fort",
-                        "north", "north",
-                        "east", "buy chips", "east", "eat chips",
-                        "west", "west", "board return", "north",
-                        "board casino", "north", "play craps", "north",
-                        "board balmoral", "east",
-                        "board neutral", "north", "board bus",
-                        "buy schooner", "drink schooner"])
-            #expect(game.isWon)
-            #expect(game.score == game.scenario.maxScore)
-            #expect(game.purse >= 0)
-        }
+    @Test func sydneyIsTapOnlyCompletable() {
+        let game = Game(scenario: Game.sydneyScenario())
+        play(game, ["take card", "board manly",
+                    "examine opera", "examine bridge", "examine fort",
+                    "north", "north",
+                    "east", "buy chips", "east", "eat chips",
+                    "west", "west", "board return", "north",
+                    "board balmoral", "east",
+                    "board neutral", "north", "board bus",
+                    "buy schooner", "drink schooner"])
+        #expect(game.isWon)
+        #expect(game.score == game.scenario.maxScore)
+        #expect(game.purse >= 0)
     }
 
     // MARK: - Gates in the newer scenarios
@@ -286,7 +283,7 @@ struct SKOGARKTests {
         #expect(game.roomID == "roppongiStation")       // shutters down pre-crawl
 
         let g2 = Game(scenario: Game.greenwichScenario())
-        play(g2, ["up", "south", "south", "buy beer", "drink beer"])
-        #expect(g2.has(flag: "hadBeer") == false)       // beer only on the bench
+        play(g2, ["up", "south", "south", "buy drink", "drink lemonade"])
+        #expect(g2.has(flag: "hadDrink") == false)      // the drink belongs on the bench
     }
 }

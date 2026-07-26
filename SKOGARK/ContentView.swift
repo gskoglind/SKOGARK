@@ -528,8 +528,6 @@ struct GameView: View {
         case "manlyBeach":    return "bg_sydney_beach"
         case "returnDeck":    return "bg_sydney_return_deck"
         case "balmoralBeach": return "bg_sydney_balmoral"
-        case "darlingDeck":   return "bg_sydney_under_bridge"
-        case "starCity":      return "bg_sydney_star_city"
         case "nbDeck":        return "bg_sydney_nb_deck"
         case "nbWharf":       return "bg_sydney_nb_wharf"
         case "oaksPub":       return "bg_sydney_oaks"
@@ -585,16 +583,14 @@ struct GameView: View {
         "sunsetCruise": ("⚓ Board the Sunset Cruise", "board sunset"),
         "manlyFerry": ("⛴ Board the Manly ferry", "board manly"),
         "balmoralFerry": ("⛴ Board the Balmoral ferry", "board balmoral"),
-        "casinoFerry": ("⛴ Board the casino ferry", "board casino"),
         "nbFerry": ("⛴ Ferry home to Neutral Bay", "board neutral"),
         "returnFerry": ("⛴ Ferry back to the Quay", "board return"),
         "bus": ("🚌 Bus up to The Oaks", "board bus"),
-        "crapsTable": ("🎲 Craps — $100 on the pass line", "play craps"),
     ]
     /// Carried items with a natural one-tap verb, keyed by item KIND —
     /// bought copies get minted ids like "beer#0", so ids won't match.
     private static let invSpecialByKind: [String: (label: String, cmd: String)] = [
-        "beer": ("Drink the beer", "drink beer"),
+        "drink": ("🥤 Drink the cold drink", "drink lemonade"),
         "chips": ("🍟 Eat the fish and chips", "eat chips"),
         "schooner": ("🍺 Drink the schooner", "drink schooner"),
     ]
@@ -670,7 +666,7 @@ struct GameView: View {
             }
         }
 
-        // Carried one-tap verbs (e.g. drink the beer at the viewpoint).
+        // Carried one-tap verbs (e.g. drink the lemonade at the viewpoint).
         for id in game.carriedItemIDs {
             if let kind = game.item(id)?.kind, let special = Self.invSpecialByKind[kind] {
                 chips.append(Chip(label: special.label, cmd: special.cmd, style: .act))

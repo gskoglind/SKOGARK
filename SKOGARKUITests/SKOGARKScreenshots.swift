@@ -60,12 +60,10 @@ final class SKOGARKScreenshots: XCTestCase {
     }
 
     @MainActor
-    func testShot2Roppongi() throws {
+    func testShot2Savannah() throws {
         let app = launch()
-        open("Japan", "roppongi", in: app)
-        tap("chip:up", in: app)                                   // the crossing
-        _ = app.buttons["chip:up"].waitForExistence(timeout: 10)  // Geronimo's stairs = settled
-        snapshot("02-Roppongi")
+        open("Savannah", "riverboat", in: app)
+        snapshot("02-Savannah")
     }
 
     @MainActor
