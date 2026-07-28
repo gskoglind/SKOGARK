@@ -236,6 +236,16 @@ struct GameView: View {
 
     private var isRiverboat: Bool { game.scenario.id == "riverboat" }
 
+    /// The narrator's accent follows the destination: Australian in Sydney,
+    /// British in Greenwich, American everywhere else.
+    private var voiceLanguage: String {
+        switch game.scenario.id {
+        case "sydney": return "en-AU"
+        case "greenwich": return "en-GB"
+        default: return "en-US"
+        }
+    }
+
     // Transient "you have arrived" location card.
     @State private var flashTitle: String?
     @State private var flashOpacity: Double = 0
@@ -289,7 +299,7 @@ struct GameView: View {
             SoundEffects.shared.cannonBoom()
         }
         let text = fresh.filter { !$0.isCommand }.map(\.text).joined(separator: "\n")
-        narrator.speak(text)
+        narrator.speak(text, language: voiceLanguage)
     }
 
     /// A location name that fades in when the player arrives somewhere new,
@@ -703,6 +713,7 @@ struct GameView: View {
             HStack(spacing: 8) {
                 ForEach(chips) { chip in
                     Button {
+                        narrator.stop() // cut off any narration still playing from the last turn
                         game.process(chip.cmd)
                     } label: {
                         Text(chip.label)
@@ -835,28 +846,33 @@ struct GameView: View {
 final class Narrator {
     private let synthesizer = AVSpeechSynthesizer()
 
-    /// Captain Mike's voice: the most natural-sounding male American voice
-    /// installed, chosen once. Voices are ranked premium > enhanced > default
-    /// quality (downloadable in Settings > Accessibility > Spoken Content), a
-    /// male voice preferred at the best available quality. Stays American
-    /// throughout — falls back to any en-US voice, then the default en-US
-    /// voice, so the narrator never picks up a non-American accent.
-    private static let voice: AVSpeechSynthesisVoice? = {
-        let american = AVSpeechSynthesisVoice.speechVoices()
-            .filter { $0.language == "en-US" }
-            .sorted { $0.quality.rawValue > $1.quality.rawValue }
-        return american.first(where: { $0.gender == .male })
-            ?? american.first
-            ?? AVSpeechSynthesisVoice(language: "en-US")
-    }()
+    /// The narrator's voice for a language: the most natural-sounding male
+    /// voice installed for that accent, chosen once per language. Voices are
+    /// ranked premium > enhanced > default quality (downloadable in Settings >
+    /// Accessibility > Spoken Content), a male voice preferred at the best
+    /// available quality. Falls back to any voice in that language, then the
+    /// system default for it, so the narrator never drifts to another accent.
+    private static var voiceCache: [String: AVSpeechSynthesisVoice?] = [:]
 
-    func speak(_ text: String) {
+    private static func voice(for language: String) -> AVSpeechSynthesisVoice? {
+        if let cached = voiceCache[language] { return cached }
+        let candidates = AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language == language }
+            .sorted { $0.quality.rawValue > $1.quality.rawValue }
+        let chosen = candidates.first(where: { $0.gender == .male })
+            ?? candidates.first
+            ?? AVSpeechSynthesisVoice(language: language)
+        voiceCache[language] = chosen
+        return chosen
+    }
+
+    func speak(_ text: String, language: String = "en-US") {
         let say = Narrator.speakable(text)
         guard !say.isEmpty else { return }
         let utterance = AVSpeechUtterance(string: say)
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
-        utterance.pitchMultiplier = 0.95 // a touch lower for Captain Mike
-        utterance.voice = Narrator.voice
+        utterance.pitchMultiplier = 0.95 // a touch lower for the narrator
+        utterance.voice = Narrator.voice(for: language)
         synthesizer.speak(utterance)
     }
 

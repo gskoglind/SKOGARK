@@ -208,9 +208,92 @@
         try { return localStorage.getItem("skogark.voice") !== "off"; }
         catch (e) { return true; }
     })();
-    let narrator = null; // chosen SpeechSynthesisVoice, once available
+    let voiceCache = {}; // accent -> chosen SpeechSynthesisVoice (or null), once available
     let voicesReady = false; // true once the voice list has actually loaded
     let pendingText = null; // narration requested before voices were ready
+
+    // The narrator's accent follows the destination: Australian in Sydney,
+    // British in Greenwich, American everywhere else.
+    function narrationLang() {
+        if (game && game.scenario) {
+            if (game.scenario.id === "sydney") return "en-AU";
+            if (game.scenario.id === "greenwich") return "en-GB";
+        }
+        return "en-US";
+    }
+
+    // Per-accent name tiebreaks; the quality tiers themselves are shared.
+    // Apple's legacy novelty voices (Fred, Ralph, Zarvox, …) sound like a
+    // 1980s robot and are never picked for any accent.
+    const NOVELTY_VOICES = /albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|fred|good news|hysterical|jester|junior|kathy|organ|ralph|superstar|trinoids|whisper|wobble|zarvox|\beddy\b|\bflo\b|grandma|grandpa|\breed\b|rocko|sandy|shelley/;
+    const VOICE_PREFS = {
+        "en-US": {
+            google: /google us english/,
+            favorites: /samantha|alex|aaron|nicky|evan|tom|allison|ava|susan|joelle/,
+            male: /\b(male|guy|andrew|christopher|eric|roger|steffan|davis|tony|jason|aaron|alex|evan|tom|nathan|david)\b/,
+        },
+        "en-GB": {
+            google: /google uk english/,
+            favorites: /daniel|kate|oliver|serena|stephanie|jamie/,
+            male: /\b(male|daniel|oliver|ryan|thomas|george|jamie|arthur)\b/,
+        },
+        "en-AU": {
+            google: /google australia/,
+            favorites: /lee|karen|matilda|duncan/,
+            male: /\b(male|lee|william|james|duncan|russell)\b/,
+        },
+    };
+
+    // Picks the best installed voice for an accent, cached per accent. Voices
+    // are ranked by how natural they sound, so the narrator is the best voice
+    // the browser has rather than whatever's first:
+    //   1. Edge's "Natural" neural voices (excellent),
+    //   2. Apple "(Enhanced)"/"(Premium)" voices the user has downloaded,
+    //   3. Siri voices,
+    //   4. Chrome's remote Google voices (network-backed but good; long lines
+    //      are chunked in speak() to dodge its cutoff bug),
+    //   5. the better built-in compacts (Samantha, Daniel, Karen, …).
+    // A male-sounding name is a small tiebreak within a tier, never a tier
+    // jump. Only a voice in the requested accent is ever assigned (an explicit
+    // utterance.voice overrides utterance.lang); with none installed, the
+    // cache holds null and the utterance's lang drives pronunciation alone.
+    function voiceFor(lang) {
+        if (!synth) return null;
+        if (lang in voiceCache) return voiceCache[lang];
+        const voices = synth.getVoices();
+        if (!voices.length) return null; // list not loaded yet; don't cache
+        const prefs = VOICE_PREFS[lang] || VOICE_PREFS["en-US"];
+        const langTest = new RegExp("^" + lang.replace("-", "[-_]"), "i");
+        function voiceScore(v) {
+            if (!langTest.test(v.lang)) return 0;
+            const name = v.name.toLowerCase();
+            if (NOVELTY_VOICES.test(name)) return 0;
+            let score = 10;
+            if (name.includes("natural")) score += 1000;
+            else if (name.includes("enhanced") || name.includes("premium")) score += 900;
+            else if (name.includes("siri")) score += 800;
+            else if (prefs.google.test(name)) score += 700;
+            else if (prefs.favorites.test(name)) score += 100;
+            if (prefs.male.test(name)) score += 30;
+            if (v.localService) score += 5; // reliability tiebreak
+            return score;
+        }
+        let best = null;
+        let bestScore = 0;
+        for (const v of voices) {
+            const score = voiceScore(v);
+            if (score > bestScore) { best = v; bestScore = score; }
+        }
+        if (best) {
+            console.info("SKOGARK narrator voice for " + lang + ":", best.name,
+                "(" + best.lang + ")", best.localService ? "local" : "REMOTE");
+        } else {
+            console.warn("SKOGARK: no " + lang + " voice installed; relying on lang='"
+                + lang + "'. Install one for a proper accent.");
+        }
+        voiceCache[lang] = best;
+        return best;
+    }
 
     function pickVoice() {
         if (!synth) return;
@@ -225,50 +308,7 @@
                     + (v.localService ? " local" : " REMOTE")
                     + (v.default ? " default" : "")));
         }
-        // Rank en-US voices by how natural they sound, so the narrator is the
-        // best voice the browser has rather than whatever's first:
-        //   1. Edge's "Natural" neural voices (excellent),
-        //   2. Apple "(Enhanced)"/"(Premium)" voices the user has downloaded,
-        //   3. Siri voices,
-        //   4. Chrome's remote "Google US English" (network-backed but good;
-        //      long lines are chunked in speak() to dodge its cutoff bug),
-        //   5. the better built-in compacts (Samantha, Alex, Aaron, …).
-        // Apple's legacy novelty voices (Fred, Ralph, Zarvox, …) sound like a
-        // 1980s robot and are never picked. A male-sounding name is a small
-        // tiebreak within a tier — Captain Mike — never a tier jump. Only an
-        // en-US voice is ever assigned (an explicit utterance.voice overrides
-        // utterance.lang); with none installed, narrator stays null and the
-        // utterance's lang="en-US" drives pronunciation alone.
-        const NOVELTY = /albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|fred|good news|hysterical|jester|junior|kathy|organ|ralph|superstar|trinoids|whisper|wobble|zarvox|\beddy\b|\bflo\b|grandma|grandpa|\breed\b|rocko|sandy|shelley/;
-        const MALE = /\b(male|guy|andrew|christopher|eric|roger|steffan|davis|tony|jason|aaron|alex|evan|tom|nathan|david)\b/;
-        function voiceScore(v) {
-            if (!/en[-_]US/i.test(v.lang)) return 0;
-            const name = v.name.toLowerCase();
-            if (NOVELTY.test(name)) return 0;
-            let score = 10;
-            if (name.includes("natural")) score += 1000;
-            else if (name.includes("enhanced") || name.includes("premium")) score += 900;
-            else if (name.includes("siri")) score += 800;
-            else if (name.includes("google us english")) score += 700;
-            else if (/samantha|alex|aaron|nicky|evan|tom|allison|ava|susan|joelle/.test(name)) score += 100;
-            if (MALE.test(name)) score += 30;
-            if (v.localService) score += 5; // reliability tiebreak
-            return score;
-        }
-        let best = null;
-        let bestScore = 0;
-        for (const v of voices) {
-            const score = voiceScore(v);
-            if (score > bestScore) { best = v; bestScore = score; }
-        }
-        narrator = best;
-        if (narrator) {
-            console.info("SKOGARK narrator voice:", narrator.name, "(" + narrator.lang + ")",
-                narrator.localService ? "local" : "REMOTE");
-        } else {
-            console.warn("SKOGARK: no en-US voice installed; relying on lang='en-US'. "
-                + "Install a US English voice for a proper American narrator.");
-        }
+        voiceCache = {}; // the list changed; re-pick per accent on demand
         // The voice list is loaded now. Release any narration that arrived
         // before it, so the first line isn't spoken in Chrome's default voice.
         voicesReady = true;
@@ -329,17 +369,19 @@
     function speak(text) {
         if (!voiceOn || !synth) return;
         // If the voice list hasn't loaded yet, speaking now lets Chrome use its
-        // default voice (often British) and ignore our en-US request. Stash the
-        // latest line instead; pickVoice flushes it once a US voice is chosen.
+        // default voice and ignore our accent request. Stash the latest line
+        // instead; pickVoice flushes it once the list is in.
         if (!voicesReady) { pendingText = text; return; }
         const say = speakable(text);
         if (!say) return;
+        const lang = narrationLang();
+        const voice = voiceFor(lang);
         for (const chunk of speechChunks(say)) {
             const utterance = new SpeechSynthesisUtterance(chunk);
-            if (narrator) utterance.voice = narrator;
-            utterance.lang = "en-US"; // force US English pronunciation
+            if (voice) utterance.voice = voice;
+            utterance.lang = lang; // the scenario's accent drives pronunciation
             utterance.rate = 1.0;
-            utterance.pitch = 0.95; // a touch lower for Captain Mike
+            utterance.pitch = 0.95; // a touch lower for the narrator
             synth.speak(utterance);
         }
     }

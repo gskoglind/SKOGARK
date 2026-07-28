@@ -2121,7 +2121,8 @@ function greenwichScenario() {
                 game.emit("The squirrel inspects the offering from a safe distance, decides you can do better, and returns to the branch. (The park kiosk sells hazelnuts.)");
                 return true;
             }
-            game.consumeFromInventory(gift);
+            // The bag survives the gift — one nut out of a whole bag, and
+            // there are always more squirrels.
             game.set("fedSquirrel");
             game.award(10, "You hold a hazelnut out on your palm and keep very still. The grey squirrel flows down the oak in three quick spirals, pauses, judges you thoroughly — and takes it from your fingers, sitting up to eat it right there on the bench arm, tail curled like a question mark. Two of its colleagues immediately begin a formal audit of your pockets. You have been accepted.");
             finishIfDone(game);
