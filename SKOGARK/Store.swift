@@ -40,8 +40,13 @@ final class Store {
     /// Loads the product and re-checks the entitlement. Writes observable
     /// state only on real changes, so the UI doesn't rebuild needlessly.
     func refresh() async {
-        let loaded = try? await Product.products(for: [Self.ticketID]).first
-        if loaded?.id != ticket?.id { ticket = loaded }
+        do {
+            let loaded = try await Product.products(for: [Self.ticketID]).first
+            print("SKOGARK store: product load ->", loaded?.id ?? "EMPTY LIST (no error; check StoreKit config / ASC)", "| hasTicket:", hasTicket)
+            if loaded?.id != ticket?.id { ticket = loaded }
+        } catch {
+            print("SKOGARK store: product load FAILED:", error)
+        }
         await refreshEntitlement()
     }
 

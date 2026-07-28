@@ -26,6 +26,7 @@
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* SKOGARK.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SKOGARK.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		778B169F30112FCC00666894 /* SKOGARKUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SKOGARKUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		779FA3A430196840009C7C93 /* SKOGARK.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = SKOGARK.storekit; sourceTree = "<group>"; };
 		77D5C15B2FFE197E004BA0CB /* SKOGARKTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SKOGARKTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -69,6 +70,7 @@
 		000000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
+				779FA3A430196840009C7C93 /* SKOGARK.storekit */,
 				000000000000000000000010 /* SKOGARK */,
 				77D5C15C2FFE197E004BA0CB /* SKOGARKTests */,
 				778B16A030112FCC00666894 /* SKOGARKUITests */,
