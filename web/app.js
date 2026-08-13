@@ -22,11 +22,6 @@
     const sceneLayers = [document.getElementById("sceneA"), document.getElementById("sceneB")];
     const locationFlash = document.getElementById("locationFlash");
     const catSprite = document.getElementById("catSprite");
-    const camsButton = document.getElementById("camsButton");
-    const camsOverlay = document.getElementById("camsOverlay");
-    const camsClose = document.getElementById("camsClose");
-    const camsSelect = document.getElementById("camsSelect");
-    const camsFrame = document.getElementById("camsFrame");
 
     // Image files for the web app, loaded from web/images/. Each room maps to a
     // base name; the "_landscape" / "_portrait" variant is chosen at runtime to
@@ -453,52 +448,6 @@
     let lastSceneKey = null;  // room + lit state, so the backdrop reacts to light
     let flashTimer = null;
 
-    // ---- Live webcams (SavannahCams HLS feeds, embedded by iframe) ----
-    const CAM_BASE = "https://www.savannahcams.com/streams/cam_";
-    const RIVER_CAMS = [
-        { slug: "river-street-east", label: "River Street East (the riverboat!)" },
-        { slug: "river-street-west", label: "River Street West" },
-        { slug: "pilots-dock", label: "Savannah Pilots Dock" },
-        { slug: "savannah-yacht-facility", label: "Savannah Yacht Facility" },
-        { slug: "talmadge-bridge", label: "Talmadge Bridge" },
-        { slug: "fort-jackson", label: "Old Fort Jackson" },
-        { slug: "elba-island", label: "Elba Island" },
-    ];
-
-    // The webcam that best matches the boat's current leg of the tour.
-    function camForRoom(roomID) {
-        if (roomID === "fortJackson") return "fort-jackson";
-        if (roomID.startsWith("bridge")) return "talmadge-bridge";
-        if (roomID.startsWith("port")) return "pilots-dock";
-        return "river-street-east"; // River Street leg (and the dock)
-    }
-
-    function showCam(slug) {
-        camsFrame.src = CAM_BASE + slug + ".html";
-        if (camsSelect.value !== slug) camsSelect.value = slug;
-    }
-
-    function buildCamSelect() {
-        if (camsSelect.options.length) return; // once
-        for (const cam of RIVER_CAMS) {
-            const option = document.createElement("option");
-            option.value = cam.slug;
-            option.textContent = cam.label;
-            camsSelect.appendChild(option);
-        }
-    }
-
-    function openCams() {
-        buildCamSelect();
-        camsOverlay.hidden = false;
-        showCam(game ? camForRoom(game.roomID) : "river-street-east");
-    }
-
-    function closeCams() {
-        camsOverlay.hidden = true;
-        camsFrame.src = "about:blank"; // stop the stream when hidden
-    }
-
     // The artwork slice behind each destination card on the opening screen.
     const DESTINATION_ART = {
         Explore:  "bg_west_of_house_landscape",
@@ -572,7 +521,6 @@
         lastRoomID = null;
         transcriptEl.textContent = "";
         gameTitle.textContent = scenario.title;
-        camsButton.hidden = scenario.id !== "riverboat";
         menuEl.hidden = true;
         gameEl.hidden = false;
         render();
@@ -587,7 +535,6 @@
         menuEl.hidden = false;
         game = null;
         stopSpeaking();
-        closeCams();
         clearScene();
         if (actionBar) actionBar.textContent = "";
     }
@@ -876,9 +823,6 @@
         renderActions();
         input.focus();
     });
-    camsButton.addEventListener("click", openCams);
-    camsClose.addEventListener("click", closeCams);
-    camsSelect.addEventListener("change", () => showCam(camsSelect.value));
 
     updateVoiceButton();
     buildMenu();

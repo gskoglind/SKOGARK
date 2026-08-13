@@ -10,7 +10,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png?v=1">
     <link rel="icon" type="image/png" sizes="512x512" href="favicon-512.png?v=1">
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=1">
-    <link rel="stylesheet" href="style.css?v=19">
+    <link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
     <main id="app">
@@ -28,8 +28,6 @@
                         title="Get a hint for your next step">&#128161; Hint</button>
                 <button id="voiceButton" type="button" aria-pressed="true"
                         title="Toggle spoken narration">&#128266; Voice</button>
-                <button id="camsButton" type="button" hidden
-                        title="Live webcams along the river">&#128247; Cams</button>
             </div>
 
             <!-- Location artwork in a fixed pane above the transcript, so the
@@ -54,28 +52,12 @@
                 <button type="submit">Go</button>
             </form>
 
-            <!-- Live-webcam overlay (SavannahCams feeds along the river). -->
-            <div id="camsOverlay" hidden>
-                <div id="camsPanel" class="overlay-panel">
-                    <div class="overlay-header">
-                        <span class="overlay-title">Live cameras along the river</span>
-                        <select id="camsSelect" aria-label="Choose a webcam"></select>
-                        <button id="camsClose" type="button" aria-label="Close cameras">&times;</button>
-                    </div>
-                    <iframe id="camsFrame" title="Live webcam"
-                            allow="autoplay; fullscreen" allowfullscreen></iframe>
-                    <div class="overlay-status">
-                        Live webcams courtesy of
-                        <a href="https://www.savannahcams.com/savannah-ga/" target="_blank" rel="noopener">SavannahCams.com</a>.
-                    </div>
-                </div>
-            </div>
         </section>
     </main>
 
     <script src="engine.js?v=30"></script>
     <script src="cat-sprite.js?v=14"></script>
-    <script src="app.js?v=31"></script>
+    <script src="app.js?v=32"></script>
 
     <!-- Privacy-friendly visit counting (no cookies): dashboard at
          https://gskoglind.goatcounter.com/ -->
