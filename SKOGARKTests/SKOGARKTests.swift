@@ -176,8 +176,20 @@ struct SKOGARKTests {
     }
 
     @Test func riverboatIsTapOnlyCompletable() {
+        // Boarding lands on the open-air top deck; the decks below are
+        // optional, so the straight-through cruise is tap-only from there.
         let game = Game(scenario: Game.riverboatScenario())
-        play(game, ["board cannon", "up", "up", "up", "west", "west", "east", "east", "east"])
+        play(game, ["board cannon", "west", "west", "east", "east", "east"])
+        #expect(game.isWon)
+        #expect(game.score == 25)
+    }
+
+    @Test func riverboatDecksAreOptionalDetour() {
+        // A passenger can still wander DOWN through all four decks and come
+        // back UP to rejoin the cruise.
+        let game = Game(scenario: Game.riverboatScenario())
+        play(game, ["board sunset", "down", "down", "down", "up", "up", "up",
+                    "west", "west", "east", "east", "east"])
         #expect(game.isWon)
         #expect(game.score == 25)
     }

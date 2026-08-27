@@ -1319,7 +1319,7 @@ extension Game {
                     game.emit("\"First time on the boat?\" a fellow passenger asks. \"They say Captain Mike tells the best stories on the river.\"")
                     return true
                 case "captain":
-                    game.emit("\"Welcome aboard the Savannah Cruise!\" the captain says. \"Four decks to enjoy — two dining rooms below, the air-conditioned sightseeing lounge on the third, and this open deck up top for the best views. We'll steam upriver past the port to the Talmadge Bridge, come about, and call on Old Fort Jackson. Head WEST from the top deck when you're ready.\"")
+                    game.emit("\"Welcome aboard the Savannah Cruise!\" the captain says. \"Four decks to enjoy — two dining rooms below, the air-conditioned sightseeing lounge on the third, and this open deck up top for the best views. We're steaming upriver past the port to the Talmadge Bridge; then we come about and call on Old Fort Jackson. Head WEST up here to stay with the tour.\"")
                     return true
                 default:
                     return false
@@ -1376,6 +1376,17 @@ extension Game {
                         game.emit("Captain Mike: \"That little white figure on the point is the Waving Girl — Florence Martus, who for forty-four years greeted every ship entering the port, waving a handkerchief by day and a lantern by night. These marshes carried Savannah's cotton and naval stores out to the world.\"")
                         game.emit("Captain Mike: \"Now, those refineries coming up on the bank — that's my favorite. See those big piles? That's the cereal. And those three tall silos yonder? Whole milk, oat milk, and skim. Biggest bowl of breakfast on the Georgia coast — all we're missing is a spoon the size of the Talmadge Bridge!\"")
                     }
+                } else if roomID == "riverD4", !game.has(flag: "castOff") {
+                    // Boarding lands here; the captain casts off — passengers
+                    // ride the tour, they don't drive the boat.
+                    game.set(flag: "castOff")
+                    game.emit("A three-tone chime sounds over the loudspeakers — the boat is about to get underway.")
+                    game.emit("Captain Mike's voice follows: \"Welcome aboard, folks! Lines away — we are underway. Two dining rooms and the sightseeing lounge are down the stairs; the best views are right here up top.\"")
+                    if sunset {
+                        game.emit("The paddle wheel churns to life as the DJ warms up his decks by the rail, and the boat eases off her berth into the evening river.")
+                    } else {
+                        game.emit("The paddle wheel churns to life, and the boat eases off her berth into the river.")
+                    }
                 }
             },
             hintStage: { game in
@@ -1385,7 +1396,7 @@ extension Game {
                         "Pick one and step aboard: BOARD THE CANNON CRUISE (or the AFTERNOON, or the SUNSET cruise).",
                     ])
                 }
-                // Only the open-air top deck (D4) drives the boat onward;
+                // Only the open-air top deck (D4) advances the tour;
                 // every leg's other decks are yours to explore with UP/DOWN.
                 let room = game.roomID
                 let onTopDeck = room.hasSuffix("D4")
@@ -1425,12 +1436,12 @@ extension Game {
                 // River Street leg (riverD1…riverD4).
                 return onTopDeck
                     ? (key: "river4", clues: [
-                        "You're up on the open-air deck — time to get underway.",
-                        "Head WEST to steam upriver toward the Talmadge Bridge.",
+                        "The boat is underway, easing along the downtown riverfront — no rush.",
+                        "Head WEST to stay with the cruise as she steams for the Talmadge Bridge.",
                     ])
                     : (key: "riverUp", clues: [
                         "You can visit all four decks with UP and DOWN — two dining rooms, the sightseeing lounge, and the open-air deck up top.",
-                        "To get underway, climb UP to the open-air deck and head WEST.",
+                        "To stay with the tour, climb UP to the open-air deck and head WEST.",
                     ])
             }
         )
@@ -2062,6 +2073,7 @@ extension Game {
                 } else if game.has(flag: "weatherCold") {
                     closing += " Outside, the north wind has given up, which is more than it can say for you."
                 }
+                closing += " And something else goes down the mountain with you, unstamped and unread for now: the country you came to visit has quietly begun to feel like a place you could stay."
                 game.win(closing)
             },
             onTalk: { game, id in
@@ -2876,7 +2888,7 @@ private func buildRiverboatWorld() -> (rooms: [String: Room], items: [String: It
              readText: "\"SAVANNAH BELLE — TODAY'S SAILINGS\n  • 1:00  The CANNON Cruise — includes a cannon salute at Fort Jackson\n  • 3:30  The AFTERNOON Cruise\n  • 7:00  The SUNSET Cruise\nEvery cruise runs west to the Talmadge Bridge, then down to Old Fort Jackson.\nBOARD the cruise you'd like.\"",
              isFixture: true))
     add(Item(id: "gangway", name: "gangway", nouns: ["gangway", "gangplank", "ramp"],
-             description: "A broad wooden gangway sloping up to the boat's main deck.", isFixture: true))
+             description: "A broad wooden gangway climbing to the boat's open-air top deck.", isFixture: true))
     add(Item(id: "guests", name: "guests", nouns: ["guests", "guest", "passengers", "tourists", "crowd"],
              description: "Cheerful guests in sun hats and windbreakers, waiting to board.",
              isFixture: true, isCreature: true))
@@ -2907,12 +2919,12 @@ private func buildRiverboatWorld() -> (rooms: [String: Room], items: [String: It
 
     add(Room(id: "riverStreet", title: "River Street Dock",
              description: "You're on the cobblestones of River Street, just east of the Hyatt, where the paddle steamer Savannah Cruise is moored. A gangway leads aboard, and a chalk schedule board lists today's sailings. Fellow sightseers line up around you, tickets in hand. (READ the SCHEDULE, then BOARD a cruise.)",
-             exits: [.north: "riverD1"],
+             exits: [.north: "riverD4"],
              items: ["schedule", "gangway", "guests", "cannonCruise", "afternoonCruise", "sunsetCruise"]))
 
-    // The boat is a four-deck boat; each cruise leg has all four decks, so
-    // passengers can roam UP/DOWN at every stage. The tour advances from the
-    // open-air top deck (D4): WEST to the bridge, then EAST to the fort.
+    // The boat is a four-deck boat; boarding lands on the open-air top deck
+    // (D4), and each cruise leg has all four decks to roam with UP/DOWN. The
+    // tour advances from D4: WEST to the bridge, then EAST to the fort.
 
     // Leg 1 — moored at River Street, downtown Savannah in view.
     add(Room(id: "riverD1", title: "First Deck — Dining Room",
@@ -2925,7 +2937,7 @@ private func buildRiverboatWorld() -> (rooms: [String: Room], items: [String: It
              description: "The air-conditioned sightseeing lounge, wrapped in panoramic glass, cool and quiet above the waterfront bustle. Stairs lead UP and DOWN.",
              exits: [.up: "riverD4", .down: "riverD2"]))
     add(Room(id: "riverD4", title: "Fourth Deck — Open-Air Deck",
-             description: "The breezy open-air top deck. Captain Mike is at the wheel, and off the rail stand the golden dome of City Hall, the old Cotton Exchange, and the Waving Girl statue on her lonely watch. Head WEST to get underway upriver; stairs lead DOWN.",
+             description: "The breezy open-air top deck, where the gangway lets you aboard. Captain Mike is at the wheel, and off the rail stand the golden dome of City Hall, the old Cotton Exchange, and the Waving Girl statue on her lonely watch. Head WEST to stay with the cruise upriver; stairs lead DOWN.",
              exits: [.west: "portD4", .down: "riverD3"],
              items: ["captain"]))
 

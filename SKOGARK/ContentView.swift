@@ -1,7 +1,6 @@
 import SwiftUI
 import UIKit
 import AVFoundation
-import WebKit
 
 @main struct MyApp: App {
     var body: some Scene {
@@ -231,11 +230,6 @@ struct GameView: View {
     @State private var narrator = Narrator()
     @State private var spokenCount = 0
 
-    // Live webcams (riverboat only).
-    @State private var showCams = false
-
-    private var isRiverboat: Bool { game.scenario.id == "riverboat" }
-
     /// The narrator's accent follows the destination: Australian in Sydney,
     /// British in Greenwich, American everywhere else.
     private var voiceLanguage: String {
@@ -272,17 +266,6 @@ struct GameView: View {
         .onChange(of: game.roomID) { flashLocation(game.roomTitle) }
         .onChange(of: game.transcript.count) { speakPending() }
         .onDisappear { narrator.stop() }
-        .sheet(isPresented: $showCams) {
-            CamsView(initialSlug: Self.camSlug(for: game.roomID))
-        }
-    }
-
-    /// The SavannahCams webcam that best matches the boat's current leg.
-    static func camSlug(for roomID: String) -> String {
-        if roomID == "fortJackson" { return "fort-jackson" }
-        if roomID.hasPrefix("bridge") { return "talmadge-bridge" }
-        if roomID.hasPrefix("port") { return "pilots-dock" }
-        return "river-street-east" // River Street leg (and the dock)
     }
 
     /// Speaks any transcript entries added since the last check (skipping the
@@ -299,7 +282,18 @@ struct GameView: View {
             SoundEffects.shared.cannonBoom()
         }
         let text = fresh.filter { !$0.isCommand }.map(\.text).joined(separator: "\n")
-        narrator.speak(text, language: voiceLanguage)
+        // The riverboat's cast-off announcement is preceded by a PA chime; the
+        // chime rings alone first, then the narrator follows.
+        if fresh.contains(where: { !$0.isCommand && $0.text.contains("A three-tone chime sounds") }) {
+            SoundEffects.shared.boardingChime()
+            let language = voiceLanguage
+            Task {
+                try? await Task.sleep(nanoseconds: 1_700_000_000)
+                narrator.speak(text, language: language)
+            }
+        } else {
+            narrator.speak(text, language: voiceLanguage)
+        }
     }
 
     /// A location name that fades in when the player arrives somewhere new,
@@ -766,15 +760,6 @@ struct GameView: View {
             .foregroundStyle(voiceOn ? .green : Color(white: 0.5))
             .padding(.leading, 12)
             .accessibilityLabel(voiceOn ? "Mute narration" : "Unmute narration")
-
-            if isRiverboat {
-                Button { showCams = true } label: {
-                    Image(systemName: "video.fill").font(.subheadline)
-                }
-                .foregroundStyle(.green)
-                .padding(.leading, 12)
-                .accessibilityLabel("Live webcams")
-            }
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
@@ -896,7 +881,8 @@ final class Narrator {
 // MARK: - Sound Effects
 
 /// Synthesizes short sound effects in code, so no audio-file assets are needed.
-/// Currently just the cannon salute at Old Fort Jackson.
+/// Currently the cannon salute at Old Fort Jackson and the riverboat's
+/// boarding chime.
 final class SoundEffects {
     static let shared = SoundEffects()
 
@@ -904,18 +890,27 @@ final class SoundEffects {
     private let player = AVAudioPlayerNode()
     private let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
     private let boom: AVAudioPCMBuffer?
+    private let chime: AVAudioPCMBuffer?
 
     private init() {
         boom = SoundEffects.makeBoom(format: format)
+        chime = SoundEffects.makeChime(format: format)
         engine.attach(player)
         engine.connect(player, to: engine.mainMixerNode, format: format)
     }
 
-    /// Plays a deep cannon boom. Best-effort: silently does nothing if the audio
-    /// engine can't start.
-    func cannonBoom() {
-        guard let boom else { return }
-        player.scheduleBuffer(boom, at: nil, options: .interrupts, completionHandler: nil)
+    /// Plays a deep cannon boom.
+    func cannonBoom() { play(boom) }
+
+    /// Plays the ship's PA chime — three soft tones, mid, low, mid — that
+    /// precedes the riverboat captain's cast-off announcement.
+    func boardingChime() { play(chime) }
+
+    /// Best-effort playback: silently does nothing if the audio engine can't
+    /// start.
+    private func play(_ buffer: AVAudioPCMBuffer?) {
+        guard let buffer else { return }
+        player.scheduleBuffer(buffer, at: nil, options: .interrupts, completionHandler: nil)
         do {
             if !engine.isRunning { try engine.start() }
             player.play()
@@ -951,85 +946,39 @@ final class SoundEffects {
         }
         return buffer
     }
-}
 
-// MARK: - Live Webcams
+    /// Builds a ~1.6s three-tone loudspeaker chime — mid, low, mid — each note
+    /// a soft-attack sine with a gentle decay and a whisper of octave overtone
+    /// for the PA-speaker timbre.
+    private static func makeChime(format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        let sampleRate = format.sampleRate
+        let duration = 1.6
+        let frameCount = AVAudioFrameCount(sampleRate * duration)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount),
+              let channel = buffer.floatChannelData?[0] else { return nil }
+        buffer.frameLength = frameCount
+        for i in 0..<Int(frameCount) { channel[i] = 0 }
 
-/// A minimal WKWebView wrapper for embedding a live webcam page.
-struct WebView: UIViewRepresentable {
-    let url: URL
-
-    func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        config.allowsInlineMediaPlayback = true
-        config.mediaTypesRequiringUserActionForPlayback = []
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.scrollView.isScrollEnabled = false
-        webView.isOpaque = false
-        webView.backgroundColor = .black
-        return webView
-    }
-
-    func updateUIView(_ webView: WKWebView, context: Context) {
-        if webView.url != url {
-            webView.load(URLRequest(url: url))
-        }
-    }
-}
-
-/// The SavannahCams live webcams along the river, embedded in a sheet with a
-/// picker. Opens on the camera matching the boat's current leg.
-struct CamsView: View {
-    let initialSlug: String
-    @Environment(\.dismiss) private var dismiss
-    @State private var slug: String
-
-    static let base = "https://www.savannahcams.com/streams/cam_"
-    static let cams: [(slug: String, label: String)] = [
-        ("river-street-east", "River Street East (the riverboat!)"),
-        ("river-street-west", "River Street West"),
-        ("pilots-dock", "Savannah Pilots Dock"),
-        ("savannah-yacht-facility", "Savannah Yacht Facility"),
-        ("talmadge-bridge", "Talmadge Bridge"),
-        ("fort-jackson", "Old Fort Jackson"),
-        ("elba-island", "Elba Island"),
-    ]
-
-    init(initialSlug: String) {
-        self.initialSlug = initialSlug
-        _slug = State(initialValue: initialSlug)
-    }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                if let url = URL(string: Self.base + slug + ".html") {
-                    WebView(url: url)
-                }
-                Text("Live webcams courtesy of SavannahCams.com")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .padding(8)
-            }
-            .navigationTitle("River Cams")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Picker("Camera", selection: $slug) {
-                        ForEach(Self.cams, id: \.slug) { cam in
-                            Text(cam.label).tag(cam.slug)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
+        let twoPi = 2.0 * Double.pi
+        let notes: [(start: Double, freq: Double)] = [(0.0, 660), (0.5, 440), (1.0, 660)]
+        let noteFrames = Int(0.55 * sampleRate)
+        for note in notes {
+            let startFrame = Int(note.start * sampleRate)
+            var phase = 0.0
+            for j in 0..<noteFrames {
+                let idx = startFrame + j
+                guard idx < Int(frameCount) else { break }
+                let t = Double(j) / Double(noteFrames)
+                let attack = min(1.0, t * 30)            // soft ~18ms attack
+                let env = attack * (1.0 - t) * (1.0 - t) // gentle decay
+                phase += twoPi * note.freq / sampleRate
+                let tone = sin(phase) + 0.3 * sin(2.0 * phase)
+                channel[idx] += Float(max(-1.0, min(1.0, tone * 0.35 * env)))
             }
         }
+        return buffer
     }
 }
-
 
 #Preview {
     ContentView()

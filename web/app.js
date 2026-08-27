@@ -436,6 +436,46 @@
         } catch (e) { /* audio is best-effort */ }
     }
 
+    // The riverboat's boarding chime — three soft loudspeaker tones (mid, low,
+    // mid), a ship's PA signal before the captain's cast-off announcement.
+    // Shares the narration mute (voiceOn) like the cannon boom.
+    function playBoardingChime() {
+        if (!voiceOn) return;
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        try {
+            if (!audioCtx) audioCtx = new AC();
+            if (audioCtx.state === "suspended") audioCtx.resume();
+            const ctx = audioCtx;
+            const now = ctx.currentTime;
+            const master = ctx.createGain();
+            master.gain.setValueAtTime(0.5, now);
+            master.connect(ctx.destination);
+            [[0.0, 660], [0.5, 440], [1.0, 660]].forEach(([start, freq]) => {
+                const t = now + start;
+                const osc = ctx.createOscillator();
+                osc.type = "sine";
+                osc.frequency.setValueAtTime(freq, t);
+                const octave = ctx.createOscillator();
+                octave.type = "sine";
+                octave.frequency.setValueAtTime(freq * 2, t);
+                const octaveGain = ctx.createGain();
+                octaveGain.gain.setValueAtTime(0.3, t);
+                const gain = ctx.createGain();
+                gain.gain.setValueAtTime(0.0001, t);
+                gain.gain.exponentialRampToValueAtTime(0.7, t + 0.03);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+                osc.connect(gain);
+                octave.connect(octaveGain).connect(gain);
+                gain.connect(master);
+                osc.start(t);
+                osc.stop(t + 0.6);
+                octave.start(t);
+                octave.stop(t + 0.6);
+            });
+        } catch (e) { /* audio is best-effort */ }
+    }
+
     function updateVoiceButton() {
         voiceButton.setAttribute("aria-pressed", String(voiceOn));
         voiceButton.textContent = voiceOn ? "\u{1F50A} Voice" : "\u{1F507} Voice";
@@ -599,6 +639,7 @@
     function render() {
         const fragment = document.createDocumentFragment();
         const spoken = [];
+        let chimed = false;
         for (let i = rendered; i < game.transcript.length; i++) {
             const entry = game.transcript[i];
             const div = document.createElement("div");
@@ -609,12 +650,20 @@
                 spoken.push(entry.text);
                 // The cannon salute at Old Fort Jackson gets an audible boom.
                 if (entry.text.indexOf("BOOOM!") !== -1) playCannonBoom();
+                // The riverboat's cast-off announcement is preceded by a PA chime.
+                if (entry.text.indexOf("A three-tone chime sounds") !== -1) chimed = true;
             }
         }
         transcriptEl.appendChild(fragment);
         rendered = game.transcript.length;
         transcriptEl.scrollTop = transcriptEl.scrollHeight;
-        if (spoken.length) speak(spoken.join("\n"));
+        if (chimed) {
+            // The chime rings alone first, then the narrator follows.
+            playBoardingChime();
+            if (spoken.length) setTimeout(() => speak(spoken.join("\n")), 1700);
+        } else if (spoken.length) {
+            speak(spoken.join("\n"));
+        }
     }
 
     function updateButton() {
