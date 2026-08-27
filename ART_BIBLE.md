@@ -31,7 +31,7 @@ After delivery, Gary imports each image **twice**: into Xcode's `Assets.xcassets
 - **Filenames are exact and final** — they go straight into code:
   `bg_<scene>_portrait.png` and `bg_<scene>_landscape.png`
   (lowercase, underscores, e.g. `bg_swizzle_inn_portrait.png`). Use the base names from the manifest verbatim; never invent or "improve" a name.
-- **No words or legible text inside the artwork.** Signs and labels read as shapes only (see the fish poster in `bg_fishmonger`). Text breaks localization and dates the art.
+- **No words or legible text inside the artwork — except in-world signage in the destination's own language.** Japanese neon in Roppongi is correct (the setting is Japan); a caption or narration line baked into the sky is not. Anything that isn't a sign a person in the scene could read stays shapes-only (see the fish poster in `bg_fishmonger`).
 - **State variants** are separate full scenes with a suffix: `_sunset`, `_dark`/`_lit`, `_open`, `_afternoon`, day cycles `_d1`–`_d4`. The manifest names each variant explicitly.
 - **Composition:** the portrait and landscape versions of a scene depict the same moment, recomposed — not a crop. Keep key subjects away from the extreme bottom edge (UI chips overlay there on phones).
 - **Delivery:** loose PNGs with final filenames, one batch per adventure. No zip archives, no `_to_delete` folders, no renaming left for Gary to do.
@@ -108,14 +108,10 @@ Show these to any session before it generates anything. Between them they encode
 | `bg_pulaski_fort_landscape` | how minimal an exterior is allowed to be |
 | `bg_roppongi_crossing_landscape` | night palette and distant-figure treatment |
 
-### Known exceptions to the no-text rule
+### Text in art — ruled on (Gary, Aug 27 2026)
 
-The "no legible text" rule in the technical spec is **already broken in the shipped art**, in two different ways. Decide which is intended before V2 art begins:
-
-1. `bg_roppongi_crossing` carries readable signage in Japanese and English (NEON BAR, ALMOND, and shop signs). Arguably deliberate — neon *is* the subject of the scene — but it contradicts the stated rule and will not localise.
-2. `bg_fuji_storm` has an English caption burned into the sky: "ABOVE THE EIGHTH · the mountain turns rough". This one looks like a mistake — UI text baked into artwork.
-
-Until it is resolved, new art should follow the rule strictly (shapes only), because that is the convention in the other 121 scenes.
+1. `bg_roppongi_crossing`'s signage is **intended and stays**. The setting is Japan; in-world signs in the destination's own language are correct — and ALMOND is the real café at the crossing, the meeting spot of Gary's Tokyo years. The rule in the technical spec now reads accordingly.
+2. `bg_fuji_storm` remains the one known defect: "ABOVE THE EIGHTH · the mountain turns rough" is a stage caption baked into the sky, not in-world signage. Regenerate it (caption removed, everything else identical) whenever Fuji art is next being made. No urgency.
 
 ---
 
