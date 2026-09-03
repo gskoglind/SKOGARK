@@ -33,6 +33,14 @@
         townButcher: "bg_butcher",
         townBakery:  "bg_bakery",
         townFish:    "bg_fishmonger",
+        // Skógar, Iceland — the namesake pilgrimage: off the coastal bus,
+        // through the folk museum, and up the falls after Þrasi's gold.
+        skogarBusStop:  "bg_skogar_bus_stop",
+        skogarMuseum:   "bg_skogar_museum",
+        skogarMeadow:   "bg_skogar_meadow",
+        skogarFalls:    "bg_skogar_falls",
+        skogarStairs:   "bg_skogar_stairs",
+        skogarPlatform: "bg_skogar_platform",
         westOfHouse: "bg_west_of_house",
         behindHouse: "bg_behind_house",
         kitchen:     "bg_kitchen",
@@ -333,12 +341,35 @@
 
     // Strip decorative rule lines and collapse whitespace so the utterance
     // sounds like prose rather than the ASCII banner.
+    // Speech-only pronunciation fixes for Skógar's Icelandic words: the
+    // transcript keeps the real spelling; the narrator is handed a respelling
+    // an English voice says correctly (there is no English-with-an-Icelandic-
+    // accent system voice, and an is-IS voice would garble the English prose).
+    // Ordered longest-first so "Reykjavík" is rewritten before "Vík".
+    const PRONUNCIATIONS = [
+        ["Fimmvörðuháls", "Fim-vur-thu-howls"],
+        ["Þórólfsson", "Thor-olf-son"],
+        ["Skógafoss", "Skoh-ga-foss"],
+        ["Reykjavík", "Rayk-ya-veek"],
+        ["Pétursey", "Peh-tur-say"],
+        ["kleinur", "klay-nur"],
+        ["Þrasi", "Thrah-see"],
+        ["Skógá", "Skoh-gow"],
+        ["kleina", "klay-na"],
+        ["Skógar", "Skoh-gar"],
+        ["Vík", "Veek"],
+    ];
+
     function speakable(text) {
-        return text
+        let say = text
             .split("\n")
             .filter((line) => !/^[─—\-=_\s]*$/.test(line))
             .join(". ")
             .trim();
+        for (const [word, spoken] of PRONUNCIATIONS) {
+            say = say.replace(new RegExp(word, "gi"), spoken);
+        }
+        return say;
     }
 
     // Splits prose into sentence-boundary chunks of roughly ≤220 characters.
@@ -727,12 +758,15 @@
         const dark = !game.canSee();
 
         // Movement — labelled with the destination room's name where known.
-        // Hidden in the dark so unlit rooms don't leak the map.
+        // Hidden in the dark so unlit rooms don't leak the map. A destination
+        // that shares this room's title (the riverboat's decks repeat leg to
+        // leg) would make the chip look like a no-op, so name the direction.
         if (room && !dark) {
             for (const dir of game.obviousExits()) {
                 const destID = room.exits[dir];
                 const dest = destID && game.rooms[destID];
-                const label = "→ " + (dest && dest.title ? dest.title : cap(dir));
+                const useTitle = dest && dest.title && dest.title !== room.title;
+                const label = "→ " + (useTitle ? dest.title : "Go " + dir);
                 frag.appendChild(makeChip(label, dir, "move"));
             }
         }

@@ -137,6 +137,43 @@ struct SKOGARKTests {
         #expect(game.score == 5)
     }
 
+    // MARK: - Skógar scenario: win path
+
+    @Test func skogarScenarioCanBeWon() {
+        let game = Game(scenario: Game.skogarScenario())
+        play(game, [
+            "east", "talk to curator", "examine ring", "west",   // the legend + trace 1
+            "north", "north", "examine rainbow",                 // trace 2 at the falls
+            "up", "up", "examine pool",                          // trace 3 from the platform
+            "down", "down", "south", "south", "east",            // back to the museum
+            "talk to curator",
+        ])
+        #expect(game.isWon)
+        #expect(game.score == 20)   // 25 needs the optional sheep bonus
+    }
+
+    // MARK: - Skógar scenario: the glint needs the legend first
+
+    @Test func glintRequiresHearingTheLegend() {
+        let game = Game(scenario: Game.skogarScenario())
+        play(game, ["north", "north", "up", "up"])   // straight to the platform
+        game.process("examine pool")
+        #expect(game.has(flag: "traceGlint") == false)   // just water, no story yet
+        #expect(game.score == 0)
+    }
+
+    // MARK: - Skógar scenario: optional sheep side-quest
+
+    @Test func feedingTheSheepAwardsBonus() {
+        let game = Game(scenario: Game.skogarScenario())
+        play(game, ["east", "buy kleina", "west", "north"])   // kleina in hand, at the meadow
+        #expect(game.has(flag: "sheepFed") == false)
+
+        game.process("give kleina to sheep")
+        #expect(game.has(flag: "sheepFed") == true)
+        #expect(game.score == 5)
+    }
+
     // MARK: - Parser
 
     @Test func parserHandlesShorthandAndFillerWords() {

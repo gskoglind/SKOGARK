@@ -181,7 +181,7 @@ final class Game {
     /// All playable scenarios, for the selection menu. Roppongi is web-only:
     /// App Review flagged its content for the iOS age rating, so it stays out
     /// of this list (the scenario code remains for engine parity with web/).
-    static let scenarios: [Scenario] = [houseScenario(), townScenario(), riverboatScenario(), fortPulaskiScenario(), fujiScenario(), greenwichScenario(), sydneyScenario()]
+    static let scenarios: [Scenario] = [houseScenario(), townScenario(), skogarScenario(), riverboatScenario(), fortPulaskiScenario(), fujiScenario(), greenwichScenario(), sydneyScenario()]
 
     convenience init() { self.init(scenario: Game.houseScenario()) }
 
@@ -235,7 +235,13 @@ final class Game {
         guard let room = rooms[currentRoomID] else { return [] }
         return obviousExits().map { direction in
             let destination = room.exits[direction].flatMap { rooms[$0] }
-            return (direction, destination?.title ?? direction.rawValue.capitalized)
+            // A destination that shares this room's title (the riverboat's
+            // decks repeat leg to leg) would make the chip look like a
+            // no-op, so name the direction instead.
+            guard let destination, destination.title != room.title else {
+                return (direction, "Go \(direction.rawValue)")
+            }
+            return (direction, destination.title)
         }
     }
 
@@ -1256,6 +1262,185 @@ extension Game {
                 }
                 clues.append(finalClue)
                 return (key: key, clues: clues)
+            }
+        )
+    }
+
+    /// Skógar, Iceland: the village the game is named for — the one
+    /// destination on the menu that's a pilgrimage still to be made rather
+    /// than a memory. Ride the coastal bus in, hear the legend of Þrasi's
+    /// treasure at the folk museum, and find the three traces the old
+    /// settler left behind: the ring, the rainbow, and the glint.
+    static func skogarScenario() -> Scenario {
+        let traces = ["traceRing", "traceRainbow", "traceGlint"]
+        func remainingTraces(_ game: Game) -> [String] {
+            var left: [String] = []
+            if !game.has(flag: "traceRing") { left.append("the ring in the museum") }
+            if !game.has(flag: "traceRainbow") { left.append("the rainbow at the foot of the falls") }
+            if !game.has(flag: "traceGlint") { left.append("the glint in the plunge pool, seen from the platform above") }
+            return left
+        }
+        return Scenario(
+            id: "skogar",
+            title: "Skógar, Iceland",
+            destination: "Explore",
+            blurb: "The village this game is named for. Ride the coastal bus in, hear the legend of Þrasi's gold, and find the three traces the old settler left behind.",
+            banner: """
+            ÞRASI'S GOLD
+            A tiny SkoGarK tale. (c) 2026
+            Skógar, Iceland — the village that gave this game its name.
+            Type HELP for commands, and READ GUIDEBOOK for your task.
+            ─────────────────────────────
+            """,
+            startRoomID: "skogarBusStop",
+            maxScore: 25,
+            startingCoins: 10,
+            build: buildSkogarWorld,
+            portalGate: { game, direction in
+                // The hollow behind the falls stays in the legend.
+                if game.roomID == "skogarFalls", direction == .inside {
+                    return "You edge along the black sand until the spray stops being mist and starts being weather. Two steps more and you can just make it out — the hollow dark behind the white curtain, exactly where the story puts the chest. Three steps and Skógafoss shoves you back, soaked through and laughing. Whatever is back there, the falls are keeping it."
+                }
+                return nil
+            },
+            portalDirection: { game, id in
+                // "ENTER THE FALLS" (or just naming them) walks into the spray.
+                (id == "falls" && game.roomID == "skogarFalls") ? .inside : nil
+            },
+            fixtureLine: { game, id in
+                guard let item = game.item(id) else { return nil }
+                if item.forSale {
+                    let name = item.name.prefix(1).uppercased() + item.name.dropFirst()
+                    return "\(name) is on offer by the coffee urn — \(item.price) coins."
+                }
+                switch id {
+                case "curator":
+                    return "The curator waits among four hundred years of salvage, hoping you'll ask."
+                case "sheep":
+                    return game.has(flag: "sheepFed")
+                        ? "The sheep is here, escorting you at a dignified distance."
+                        : "The sheep stands in the exact middle of the path, considering you."
+                default:
+                    return nil
+                }
+            },
+            onMoveObject: { game, id in
+                // EAT the kleina — cultural research, freely chosen.
+                guard game.item(id)?.kind == "kleina" else { return false }
+                guard game.isCarrying(id) else {
+                    game.emit("Museum rules: kleinur are four coins. (BUY KLEINA.)")
+                    return true
+                }
+                game.consumeFromInventory(id)
+                game.emit("Cardamom, crisp edges, still faintly warm — gone in four bites. Somewhere, a great-grandmother's recipe scores another convert.")
+                return true
+            },
+            onGive: { game, gift, recipient in
+                if recipient == "sheep" {
+                    if game.item(gift)?.kind == "kleina" {
+                        if game.has(flag: "sheepFed") {
+                            game.emit("The sheep declines with a slow blink. One kleina is a toll; two is a bribe, and it is an honest sheep.")
+                            return true
+                        }
+                        game.set(flag: "sheepFed")
+                        game.consumeFromInventory(gift)
+                        game.award(5, nil)
+                        game.emit("The sheep accepts the kleina with the unhurried majesty of a toll collector taking exact change, chews it precisely eleven times, and steps aside — then falls in behind you at a dignified distance. A colleague now.")
+                        return true
+                    }
+                    game.emit("The sheep gives the \(game.item(gift)?.name ?? "offering") one long look and returns to the important work of standing exactly where people want to walk.")
+                    return true
+                }
+                if recipient == "curator", game.item(gift)?.kind == "kleina" {
+                    game.emit("\"One a day,\" the curator says, patting his chest sadly. \"Doctor's orders. But the sheep out on the meadow path has no doctor.\"")
+                    return true
+                }
+                return false
+            },
+            onTalk: { game, id in
+                switch id {
+                case "sheep":
+                    if game.has(flag: "sheepFed") {
+                        game.emit("\"Mehh,\" says the sheep — warmly, this time.")
+                    } else {
+                        game.emit("\"Mehh,\" the sheep says, with the flat delivery of an official who has seen your documents before. It glances, briefly but meaningfully, at the pocket where a kleina would be.")
+                    }
+                    return true
+                case "curator":
+                    if !game.has(flag: "legendTold") {
+                        game.set(flag: "legendTold")
+                        game.emit("\"Þrasi Þórólfsson,\" the curator begins, in the voice of a man opening a door he loves to open. \"First settler under these cliffs. Rich — nobody agrees how. Before he died, he sank a chest of gold in the hollow behind Skógafoss, and there it stayed until men got ropes to the ring on its side and hauled. The ring tore free. The chest slid back into the dark for good. That very ring is here — it hung on the church door for centuries. LOOK at it. Then go down to the falls and look properly: the spray, and the pool from the platform above. On a bright day, people still see... well.\" He smiles and straightens a case that needed no straightening. \"Go see.\"")
+                        return true
+                    }
+                    let remaining = remainingTraces(game)
+                    if remaining.isEmpty {
+                        game.award(5, nil)
+                        let stamp = game.isCarrying("guidebook")
+                            ? "He stamps the back page of your guidebook with the museum's mark — a brass ring, of course — and hands it back like a diploma."
+                            : "He shakes your hand like a man conferring a degree."
+                        game.win("\"The ring, the rainbow, and the glint,\" the curator counts on three fingers, and his face folds into a smile with forty years of practice behind it. \"Then you've found Þrasi's gold. It was never coming out of that pool — it's what brings people here to look, and stand in rainbows, and climb five hundred steps to squint at foam. The old settler pays a little of it out to everyone who looks properly.\" \(stamp) Outside, right on time, the evening bus grumbles into the lay-by. Skógar, done properly, in an afternoon.")
+                        return true
+                    }
+                    game.emit("\"Back already?\" The curator hears you out, counting on his fingers, and shakes his head happily. \"Not yet — you still haven't seen \(remaining.joined(separator: "; ")). Come back when you've truly looked.\"")
+                    return true
+                default:
+                    return false
+                }
+            },
+            onExamine: { game, id in
+                // The traces of Þrasi's gold: looking IS the treasure hunt.
+                // Each is scored once, and the third prompts the walk back.
+                func spot(_ flag: String, _ text: String) -> Bool {
+                    if game.has(flag: flag) {
+                        game.emit(text)
+                    } else {
+                        game.set(flag: flag)
+                        let count = traces.filter { game.has(flag: $0) }.count
+                        game.award(5, text + " (\(count) of 3 traces.)")
+                        if count == traces.count {
+                            game.emit("(The ring, the rainbow, and the glint — all three. The curator at the museum would dearly love to hear it.)")
+                        }
+                    }
+                    return true
+                }
+                switch id {
+                case "ring":
+                    return spot("traceRing", "The ring is brass, broad as a fist, and polished bright by four centuries of hands. It was wrenched from the side of Þrasi's chest when the men of Skógar got ropes on it and hauled — the ring tore free, the chest slid back under the falls, and this is every ounce of the treasure anyone ever landed. It hung on the church door for generations; the door and the ring both ended up here.")
+                case "rainbow":
+                    return spot("traceRainbow", "The rainbow stands full and double-arched in the spray, one foot on the black sand and one in the river — close enough to walk through, so you do. There's nothing at the end of it but wet grass and thunder. But for one step you were standing inside a rainbow, which is more than any chest of gold has ever done for anybody.")
+                case "plungePool":
+                    guard game.has(flag: "legendTold") else {
+                        game.emit("White water churning over deep glacial green. Handsome — but so far, just water. They say you need the story first for this view to show you anything. (The curator at the museum tells it best.)")
+                        return true
+                    }
+                    return spot("traceGlint", "You lean out over the rail and look straight down the white throat of the falls into the pool. Green, then white, then green — and then, for half a heartbeat between churns, a wink of gold deep beneath the foam. Sun on a wet stone, probably. The corner of a chest that already kept its ring, possibly. You find you're grinning either way.")
+                case "falls":
+                    game.emit("Sixty metres of falling white, thunder you feel in your sternum, spray drifting off the impact like smoke. And behind the curtain — the story goes — a hollow in the rock, and in the hollow, whatever is left of Þrasi's chest. (You could always try to go INSIDE.)")
+                    return true
+                default:
+                    return false
+                }
+            },
+            hintStage: { game in
+                if !game.has(flag: "legendTold") {
+                    return (key: "legend", clues: [
+                        "Every treasure hunt starts with its story, and Skógar keeps its story indoors, east of the bus stop.",
+                        "Visit the folk museum and TALK TO the CURATOR. (The GUIDEBOOK on the bus-stop bench lists the rest — TAKE it and READ it.)",
+                    ])
+                }
+                let bonus = game.has(flag: "sheepFed") ? "" : " Bonus: the sheep on the meadow path approves of kleinur — BUY KLEINA at the museum (+5)."
+                let remaining = remainingTraces(game)
+                if remaining.isEmpty {
+                    return (key: "return", clues: [
+                        "You've seen all three traces. Somebody in this village collects stories for a living.",
+                        "Return to the museum and TALK TO the CURATOR." + bonus,
+                    ])
+                }
+                return (key: "traces:" + remaining.joined(separator: ","), clues: [
+                    "The guidebook names three traces of Þrasi's gold. Still unseen: \(remaining.joined(separator: "; ")).",
+                    "LOOK closely at things where they live: the RING in the museum, the RAINBOW at the foot of the falls, the POOL from the overlook platform up the staircase.",
+                    "EXAMINE each of the three, then bring the tale back to the curator." + bonus,
+                ])
             }
         )
     }
@@ -2878,6 +3063,92 @@ private func buildTownWorld() -> (rooms: [String: Room], items: [String: Item]) 
 
     return (rooms, items)
 }
+
+private func buildSkogarWorld() -> (rooms: [String: Room], items: [String: Item]) {
+    var items: [String: Item] = [:]
+    func add(_ item: Item) { items[item.id] = item }
+
+    // The bus stop.
+    add(Item(id: "timetable", name: "bus timetable", nouns: ["timetable", "schedule", "sign", "post"],
+             description: "A weathered timetable bolted to a post beside the lay-by.",
+             readText: "\"REYKJAVÍK–VÍK COASTAL BUS\n  Eastbound: 09:55 and 18:05.\n  Westbound: 10:12 and 18:40.\nMiss the evening bus and you live here now. Skógar has about twenty-five residents; you would make twenty-six.\"",
+             isFixture: true))
+    add(Item(id: "guidebook", name: "guidebook", nouns: ["guidebook", "guide", "book"],
+             description: "A thin, rain-warped guidebook, open to the page on Skógar.", isTakeable: true,
+             readText: "\"SKÓGAR IN AN AFTERNOON — three things not to miss:\n  • the ring from Þrasi's chest, in the folk museum\n  • the rainbow in the spray, at the foot of Skógafoss\n  • and if the old legend is true, a glint of gold in the plunge pool, seen from the platform above the falls\nHear the legend from the museum's curator first — it's better in person. (The village is small: lost, GO TO MUSEUM walks you back from anywhere.)\""))
+    add(Item(id: "bench", name: "bench", nouns: ["bench", "seat"],
+             description: "A plain wooden bench facing the cliffs, silvered by weather.",
+             readText: "You sit where the guidebook was left and take the village in: two dozen roofs, a green cliff wall, spray standing above the rooftops like smoke that forgot to rise. Whoever left the guidebook sat here deciding they didn't need it anymore. You can see how that happens.",
+             isFixture: true, kind: "seat"))
+
+    // The folk museum.
+    add(Item(id: "curator", name: "curator", nouns: ["curator", "keeper", "man"],
+             description: "The museum's curator — stooped, bright-eyed, and visibly delighted that the bus brought him somebody who asks questions.",
+             isFixture: true, isCreature: true))
+    add(Item(id: "ring", name: "brass ring", nouns: ["ring", "handle", "door", "chest"],
+             description: "The ring from Þrasi's chest, set fast in the old church door.",
+             isFixture: true))
+    add(Item(id: "boat", name: "fishing boat Pétursey", nouns: ["boat", "petursey", "ship"],
+             description: "An eight-oared open fishing boat, tarred black, that worked the surf off this coast for sixty years. Every plank has been replaced at least once; it is still, everyone here would insist, the same boat.",
+             isFixture: true))
+    add(Item(id: "turfHouses", name: "turf houses", nouns: ["turf", "houses", "house", "roof", "roofs"],
+             description: "Low houses roofed in living grass, their backs dug into the hillside — warm in winter, mowable in summer.",
+             isFixture: true))
+    add(Item(id: "kleina", name: "kleina", nouns: ["kleina", "kleinur", "doughnut", "donut", "twist", "pastry"],
+             description: "A twisted, diamond-shaped Icelandic doughnut, fried golden and dusted with sugar.",
+             isTakeable: true, isFixture: true, forSale: true, price: 4, kind: "kleina"))
+
+    // The meadow, the falls, and the climb.
+    add(Item(id: "sheep", name: "sheep", nouns: ["sheep", "ewe", "lamb"],
+             description: "A round Icelandic sheep in a full winter's worth of wool, standing exactly where you want to walk. It has the eyes of an official who has processed many tourists.",
+             isFixture: true, isCreature: true))
+    add(Item(id: "falls", name: "Skógafoss", nouns: ["skogafoss", "skógafoss", "falls", "waterfall", "curtain", "spray", "mist", "hollow"],
+             description: "The falls, sixty metres of unbroken white.",
+             isFixture: true))
+    add(Item(id: "rainbow", name: "rainbow", nouns: ["rainbow", "bow", "colors", "colours"],
+             description: "A rainbow standing in the spray.",
+             isFixture: true))
+    add(Item(id: "fulmars", name: "fulmars", nouns: ["fulmars", "fulmar", "birds", "bird", "gulls"],
+             description: "Stiff-winged seabirds riding the updraft along the cliff face, level with your nose, at zero effort. Fulmars — not gulls, and they would want that on the record.",
+             isFixture: true))
+    add(Item(id: "plungePool", name: "plunge pool", nouns: ["pool", "plunge", "water", "glint", "gold", "chest", "bottom", "foam"],
+             description: "The plunge pool at the foot of the falls, far below.",
+             isFixture: true))
+    add(Item(id: "river", name: "Skógá river", nouns: ["river", "skoga", "skógá", "highlands", "trail"],
+             description: "The Skógá comes down off the highlands in a staircase of waterfalls — from here you can count four more, and the map swears there are twenty. A walking trail follows it up and over the Fimmvörðuháls pass, for people with different afternoons than yours.",
+             isFixture: true))
+
+    var rooms: [String: Room] = [:]
+    func add(_ room: Room) { rooms[room.id] = room }
+
+    add(Room(id: "skogarBusStop", title: "Skógar Bus Stop",
+             description: "The coastal bus sighs off east and leaves you standing in a gravel lay-by at the edge of Skógar — two dozen roofs under a green wall of cliffs, and somewhere behind them a waterfall doing the sound of permanent applause. A bench holds a rain-warped guidebook someone left behind. The folk museum is east; a footpath heads north across the meadow toward the falls.",
+             exits: [.east: "skogarMuseum", .north: "skogarMeadow"],
+             items: ["timetable", "guidebook", "bench"]))
+    add(Room(id: "skogarMuseum", title: "Skógar Folk Museum",
+             description: "Turf-roofed houses back into the hillside, and the main hall holds a lifetime of this coast: an eight-oared fishing boat, whale-bone tools, and — set fast in the old church door — a worn brass ring with a story attached. The curator presides over all of it, and a plate of kleinur waits by the coffee urn near the till. The bus stop is back west.",
+             exits: [.west: "skogarBusStop"],
+             items: ["curator", "ring", "boat", "turfHouses", "kleina"]))
+    add(Room(id: "skogarMeadow", title: "Skógá Meadow Path",
+             description: "A flat green mile along the Skógá river, the falls growing louder with every step. A single sheep occupies the exact centre of the path with the calm authority of a customs officer. The falls are north; the bus stop is back south.",
+             exits: [.south: "skogarBusStop", .north: "skogarFalls"],
+             items: ["sheep"]))
+    add(Room(id: "skogarFalls", title: "Foot of Skógafoss",
+             description: "Skógafoss falls sixty metres in one unbroken white curtain, wide as a church and far louder, and its spray soaks the black sand for a hundred paces around. Today the sun is out, and a rainbow stands in the mist as if booked in advance. A steel staircase climbs the eastern slope; the meadow path is back south.",
+             exits: [.south: "skogarMeadow", .up: "skogarStairs"],
+             items: ["falls", "rainbow"]))
+    add(Room(id: "skogarStairs", title: "The Staircase",
+             description: "Five hundred and twenty-seven steps switchback up the green shoulder of the falls, and your legs are counting every one. Fulmars ride the updraft off the cliff at eye level, frankly showing off. The overlook platform is up; the base of the falls is back down.",
+             exits: [.up: "skogarPlatform", .down: "skogarFalls"],
+             items: ["fulmars"]))
+    add(Room(id: "skogarPlatform", title: "The Overlook Platform",
+             description: "A railed platform hangs at the lip of Skógafoss, where the Skógá gathers itself and simply steps off the edge of the highlands. Below, the plunge pool churns white over green; upstream, the river climbs away in a staircase of smaller falls toward the Fimmvörðuháls pass; ahead lie the meadow, the village, and the flat silver line of the sea. The stairs are back down.",
+             exits: [.down: "skogarStairs"],
+             items: ["plungePool", "river"]))
+
+    return (rooms, items)
+}
+
 private func buildRiverboatWorld() -> (rooms: [String: Room], items: [String: Item]) {
     var items: [String: Item] = [:]
     func add(_ item: Item) { items[item.id] = item }

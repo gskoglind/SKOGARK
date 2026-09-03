@@ -441,6 +441,14 @@ struct GameView: View {
         case "kitchen":     return "bg_kitchen"
         case "livingRoom":  return game.has(flag: "rugMoved") ? "bg_living_room_open" : "bg_living_room"
         case "cellar":      return game.canSeeRoom ? "bg_cellar_lit" : "bg_cellar_dark"
+        // Skógar, Iceland — the namesake pilgrimage: off the coastal bus,
+        // through the folk museum, and up the falls after Þrasi's gold.
+        case "skogarBusStop":  return "bg_skogar_bus_stop"
+        case "skogarMuseum":   return "bg_skogar_museum"
+        case "skogarMeadow":   return "bg_skogar_meadow"
+        case "skogarFalls":    return "bg_skogar_falls"
+        case "skogarStairs":   return "bg_skogar_stairs"
+        case "skogarPlatform": return "bg_skogar_platform"
         // Savannah River cruise — a sightseeing tour down the river past the
         // River Street riverfront. The dock, then four decks across five legs,
         // and the finale at Old Fort Jackson (where the 1pm Cannon Cruise fires
@@ -851,8 +859,30 @@ final class Narrator {
         return chosen
     }
 
+    /// Speech-only pronunciation fixes for Skógar's Icelandic words: the
+    /// transcript keeps the real spelling; the narrator is handed a respelling
+    /// an English voice says correctly (there is no English-with-an-Icelandic-
+    /// accent system voice, and an is-IS voice would garble the English prose).
+    /// Ordered longest-first so "Reykjavík" is rewritten before "Vík".
+    private static let pronunciations: [(String, String)] = [
+        ("Fimmvörðuháls", "Fim-vur-thu-howls"),
+        ("Þórólfsson", "Thor-olf-son"),
+        ("Skógafoss", "Skoh-ga-foss"),
+        ("Reykjavík", "Rayk-ya-veek"),
+        ("Pétursey", "Peh-tur-say"),
+        ("kleinur", "klay-nur"),
+        ("Þrasi", "Thrah-see"),
+        ("Skógá", "Skoh-gow"),
+        ("kleina", "klay-na"),
+        ("Skógar", "Skoh-gar"),
+        ("Vík", "Veek"),
+    ]
+
     func speak(_ text: String, language: String = "en-US") {
-        let say = Narrator.speakable(text)
+        var say = Narrator.speakable(text)
+        for (word, spoken) in Narrator.pronunciations {
+            say = say.replacingOccurrences(of: word, with: spoken, options: .caseInsensitive)
+        }
         guard !say.isEmpty else { return }
         let utterance = AVSpeechUtterance(string: say)
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate

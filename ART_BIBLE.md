@@ -8,6 +8,8 @@
 
 A text-adventure game (iOS + web) that is also a memoir. Every destination is a real place from Gary Skoglind's life — Savannah, Fort Pulaski, Mount Fuji, Roppongi, Greenwich, Sydney — and several characters are real people who know they're in the game (Captain Mike of the Georgia Queen; Ranger Max at Fort Pulaski; the Roppongi bartenders Ryan, Martin, and Matt). Treat real people warmly and with care: friendly cartoon figures, never caricature, no likeness realism required.
 
+One exception to the memoir rule: **Skógar, Iceland** (added September 2026, in the free Explore group) is the village the game is named for, and the one destination Gary hasn't visited — a pilgrimage still to be made rather than a memory. Its art is imagined the same way the adventure is: warmly, from the legend and the landscape, not from photographs of a trip.
+
 The stray cat at the fishmonger's stall is a memorial to Gary's cats, Georgia and Ziggy. It is already painted into the fishmonger scene. If cats appear in future art, they matter — they are never generic decoration.
 
 **V2 destinations in planning (September 2026):** Bermuda (scooters, Bermuda shorts, the Swizzle Inn, Horseshoe Bay), Windsor (the Long Walk, the Crooked House), Lake Powell / Rainbow Bridge (early-1980s day trip by four-seat prop plane), Singapore.
@@ -72,6 +74,7 @@ Palette is chosen per destination and stays consistent across that destination�
 - **Roppongi** — deep purple-navy night, magenta/cyan/green neon, warm window yellow
 - **Mount Fuji** — slate greys and near-black, one warm lit window
 - **Explore (house & village)** — cool off-white tile, muted blue, warm brown
+- **Skógar, Iceland** — moss and sage green, basalt grey, black sand, glacier-white water, soft grey-blue sky; the one saturated accent is the rainbow at the falls
 
 ### Lighting
 
@@ -111,7 +114,23 @@ Show these to any session before it generates anything. Between them they encode
 ### Text in art — ruled on (Gary, Aug 27 2026)
 
 1. `bg_roppongi_crossing`'s signage is **intended and stays**. The setting is Japan; in-world signs in the destination's own language are correct — and ALMOND is the real café at the crossing, the meeting spot of Gary's Tokyo years. The rule in the technical spec now reads accordingly.
-2. `bg_fuji_storm` remains the one known defect: "ABOVE THE EIGHTH · the mountain turns rough" is a stage caption baked into the sky, not in-world signage. Regenerate it (caption removed, everything else identical) whenever Fuji art is next being made. No urgency.
+2. `bg_fuji_storm` remains a known defect: "ABOVE THE EIGHTH · the mountain turns rough" is a stage caption baked into the sky, not in-world signage. Regenerate it (caption removed, everything else identical) whenever Fuji art is next being made. No urgency.
+3. `bg_greenwich_park_lawn` has the same defect (noticed Sep 3 2026, during the Skógar delivery): "GREENWICH PARK · the lawn" is baked into the sky. Same remedy — regenerate caption-free whenever Greenwich art is next being made. No urgency.
+
+## Skógar, Iceland — scene notes (art delivered Sep 3 2026)
+
+Six scenes, no state variants, all sunny (the adventure says so: "today the sun is out"). Bright overcast-Nordic light, no cast shadows as usual. Any signage would be in Icelandic, but none of these scenes needs any. The waterfall, Skógafoss, is a single unbroken white curtain about 60 m tall and 25 m wide with a green cliff wall either side and black sand below — it appears at different distances in four of the six scenes, so keep its shape consistent.
+
+| Scene | What's in it |
+|---|---|
+| `bg_skogar_bus_stop` | A gravel lay-by at the village edge: a bench, a bus-timetable post, a scatter of small roofs, the green cliff wall behind, and the falls as a distant white ribbon with spray standing above the rooftops. A departing bus may be small in the distance. |
+| `bg_skogar_museum` | The folk museum: turf-roofed houses (living grass roofs, backs dug into the hillside) and/or the museum hall interior — a black eight-oared fishing boat, an old wooden church door with a brass ring set in it, a plate of kleinur (twisted diamond-shaped doughnuts) by a coffee urn. The brass ring is the story's relic; give it a place of honour. |
+| `bg_skogar_meadow` | A flat green meadow path along the Skógá river, falls ahead mid-distance. One round Icelandic sheep standing dead-centre on the path, facing the viewer. The sheep is this destination's character — friendly, woolly, faintly official. |
+| `bg_skogar_falls` | The base of Skógafoss, filling the frame: the white curtain, black sand, drifting spray — and a full double rainbow standing in the mist, one foot on the sand and one in the river. The rainbow is the destination's one saturated accent. A small steel staircase visible climbing the right-hand (eastern) slope. |
+| `bg_skogar_stairs` | On the staircase partway up: switchbacking metal steps against the green slope, the falls thundering close on one side, two or three stiff-winged fulmars gliding at eye level. |
+| `bg_skogar_platform` | The railed overlook at the lip of the falls: the river arriving from the highlands (a staircase of smaller falls upstream), the water simply stepping off the edge, the plunge pool churning far below, and beyond it the meadow, the village roofs, and a flat silver sea horizon. A tiny wink of gold deep in the pool's foam is welcome — subtle enough to be arguable, exactly as the legend requires. |
+
+As built (delivered Sep 3 2026): the museum scene is the interior hall — the brass ring centred on the church door with a soft warm glow, boat and kleinur flanking, and a window looking out on two turf gables with the falls as a distant ribbon. The platform scene veils the drop in spray rising from the gorge (from the lip the curtain isn't actually visible), with the pool and the gold wink showing above it. Skógafoss keeps the same 2.3:1 curtain silhouette across all four scenes it appears in.
 
 ---
 

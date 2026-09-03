@@ -1,11 +1,11 @@
 # SKOGARK Asset Manifest
 
-*Generated 2026-08-27 by `tools/build_asset_manifest.py` — do not edit by hand; rerun the script after every art import.*
+*Generated 2026-09-03 by `tools/build_asset_manifest.py` — do not edit by hand; rerun the script after every art import.*
 
 Each scene needs **two PNGs** (`_portrait`, `_landscape`) in **two places** (Xcode `Assets.xcassets`, `web/images/`).
 Canonical sizes: portrait 1080x1920, landscape 1920x1080.
 
-**123 scenes · 123 rows · 0 drift item(s)**
+**129 scenes · 129 rows · 0 drift item(s) · 0 scene(s) awaiting art**
 
 ## Drift (fix these)
 
@@ -43,6 +43,17 @@ Legend: ✓ present, **✗ MISSING**. Columns are Xcode/web × portrait/landscap
 | `bg_living_room_open` | ✓ | ✓ | ✓ | ✓ |
 | `bg_village_square` | ✓ | ✓ | ✓ | ✓ |
 | `bg_west_of_house` | ✓ | ✓ | ✓ | ✓ |
+
+### Explore — Skógar, Iceland
+
+| Scene | Xcode P | Xcode L | Web P | Web L |
+|---|---|---|---|---|
+| `bg_skogar_bus_stop` | ✓ | ✓ | ✓ | ✓ |
+| `bg_skogar_falls` | ✓ | ✓ | ✓ | ✓ |
+| `bg_skogar_meadow` | ✓ | ✓ | ✓ | ✓ |
+| `bg_skogar_museum` | ✓ | ✓ | ✓ | ✓ |
+| `bg_skogar_platform` | ✓ | ✓ | ✓ | ✓ |
+| `bg_skogar_stairs` | ✓ | ✓ | ✓ | ✓ |
 
 ### Savannah — Riverboat cruise
 

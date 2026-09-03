@@ -29,6 +29,7 @@ ADVENTURE_GROUPS = [
         "bg_cellar_", "bg_inn_kitchen", "bg_village_square", "bg_butcher",
         "bg_bakery", "bg_fishmonger",
     )),
+    ("Explore — Skógar, Iceland", ("bg_skogar_",)),
     ("Savannah — Riverboat cruise", ("bg_cruise_", "bg_river_dock", "bg_fort_jackson")),
     ("Savannah — Fort Pulaski", ("bg_pulaski_",)),
     ("Japan — Mount Fuji", ("bg_fuji_",)),
@@ -112,13 +113,25 @@ def main():
         if m:
             bases.add(m.group(1))
 
+    # Scenes the code references before any art exists are the pipeline's
+    # work orders: they get all-✗ rows and a "Needed art" listing, not drift.
+    # A trailing underscore marks a prefix check (hasPrefix/indexOf), not a scene.
+    code_only = {b for b in literals if b not in bases and not b.endswith("_")}
+    bases |= code_only
+
     rows_by_group = {}
     drift = []
+    needed = []
     spare = []
     notes = []
     dims = {}
 
     for base in sorted(bases):
+        if base in code_only:
+            needed.append(f"`{base}` — referenced by code, no art on either platform yet")
+            cells = {orient: (False, False) for orient in ORIENTATIONS}
+            rows_by_group.setdefault(group_for(base), []).append((base, cells))
+            continue
         cells = {}
         for orient in ORIENTATIONS:
             full = f"{base}_{orient}"
@@ -166,7 +179,7 @@ def main():
     canon_txt = ", ".join(f"{o} {s[0]}x{s[1]}" for o, s in canon.items())
     out.append(f"Canonical sizes: {canon_txt}.")
     out.append("")
-    out.append(f"**{len(bases)} scenes · {sum(len(v) for v in rows_by_group.values())} rows · {len(drift)} drift item(s)**")
+    out.append(f"**{len(bases)} scenes · {sum(len(v) for v in rows_by_group.values())} rows · {len(drift)} drift item(s) · {len(needed)} scene(s) awaiting art**")
     out.append("")
     out.append("## Drift (fix these)")
     out.append("")
@@ -176,6 +189,14 @@ def main():
     else:
         out.append("- None. Both platforms are in sync.")
     out.append("")
+    if needed:
+        out.append("## Needed art (new scenes — generate these)")
+        out.append("")
+        out.append("Each needs a portrait and a landscape PNG, imported to both Xcode and web/images. See the scene notes in `ART_BIBLE.md`.")
+        out.append("")
+        for n in sorted(needed):
+            out.append(f"- {n}")
+        out.append("")
     if spare:
         out.append("## Spare art (fine — available for future rooms)")
         out.append("")
@@ -218,9 +239,11 @@ def main():
     out.append("")
 
     MANIFEST.write_text("\n".join(out) + "\n")
-    print(f"Wrote {MANIFEST} — {len(bases)} scenes, {len(set(drift))} drift item(s)")
+    print(f"Wrote {MANIFEST} — {len(bases)} scenes, {len(set(drift))} drift item(s), {len(needed)} scene(s) awaiting art")
     for d in sorted(set(drift)):
         print(f"  DRIFT: {d}")
+    for n in sorted(needed):
+        print(f"  NEEDED: {n}")
 
 
 if __name__ == "__main__":
