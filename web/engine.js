@@ -98,6 +98,16 @@ class Game {
     }
     consumeFromInventory(id) { this.inventory = this.inventory.filter((x) => x !== id); }
     revealItem(id, roomID) { if (this.rooms[roomID]) this.rooms[roomID].items.push(id); }
+    // Moves an item (a companion, say) out of whatever room holds it and into
+    // roomID. A no-op if it's already there.
+    moveItem(id, roomID) {
+        const target = this.rooms[roomID];
+        if (!target || target.items.includes(id)) return;
+        for (const key in this.rooms) this.rooms[key].items = this.rooms[key].items.filter((x) => x !== id);
+        target.items.push(id);
+    }
+    // What the purse is counted in ("coins" unless the scenario says otherwise).
+    get currency() { return this.scenario.currency || "coins"; }
     // Spends coins if the purse covers it; returns whether it did.
     spend(amount) {
         if (this.coins < amount) return false;
@@ -171,6 +181,7 @@ class Game {
             case "ring": case "throw": case "play":
             case "stand": case "straddle": case "drink": case "sip":
             case "eat": case "scoff":
+            case "wear": case "don": case "staple": case "pin":
                 this.moveObject(rest);
                 break;
             case "turn":
@@ -198,7 +209,7 @@ class Game {
                 this.buyItem(rest);
                 break;
             case "coins": case "money": case "wealth":
-                this.emit(this.coins > 0 ? `You have ${this.coins} coins.` : "You don't have any money.");
+                this.emit(this.coins > 0 ? `You have ${this.coins} ${this.currency}.` : "You don't have any money.");
                 break;
             case "inventory": case "i": case "inv":
                 this.showInventory();
@@ -472,7 +483,7 @@ class Game {
             }
         }
         if (item.isLightSource) text += item.isLit ? " It is currently lit." : " It is not lit.";
-        if (item.forSale) text += ` It's for sale for ${item.price} coins.`;
+        if (item.forSale) text += ` It's for sale for ${item.price} ${this.currency}.`;
         this.emit(text);
     }
 
@@ -501,8 +512,10 @@ class Game {
         }
         this.removeItemFromWorld(id);
         this.inventory.push(id);
-        if (this.scenario.onTake) this.scenario.onTake(this, id);
         this.emit("Taken.");
+        // The hook speaks after the confirmation, so a pickup that ends the
+        // story (Bermuda's change) isn't followed by a stray "Taken."
+        if (this.scenario.onTake) this.scenario.onTake(this, id);
     }
 
     drop(words) {
@@ -650,7 +663,7 @@ class Game {
         }
         const ware = this.items[wareID];
         if (this.coins < ware.price) {
-            this.emit(`You can't afford the ${ware.name} — it costs ${ware.price} coins and you have ${this.coins}.`);
+            this.emit(`You can't afford the ${ware.name} — it costs ${ware.price} ${this.currency} and you have ${this.coins}.`);
             return;
         }
         this.coins -= ware.price;
@@ -661,7 +674,8 @@ class Game {
             id: boughtID, isTakeable: true, isFixture: false, forSale: false,
         });
         this.inventory.push(boughtID);
-        this.emit(`You buy the ${ware.name} for ${ware.price} coins. You have ${this.coins} left.`);
+        this.emit(`You buy the ${ware.name} for ${ware.price} ${this.currency}. You have ${this.coins} left.`);
+        if (this.scenario.onBuy) this.scenario.onBuy(this, boughtID, wareID);
     }
 
     // Progressive, opt-in hint. Each call escalates from a gentle nudge to an
@@ -696,7 +710,7 @@ class Game {
             lines.push("You are carrying:");
             for (const id of this.inventory) if (this.items[id]) lines.push(`  a ${this.items[id].name}`);
         }
-        if (this.scenario.startingCoins > 0) lines.push(`You have ${this.coins} coins.`);
+        if (this.scenario.startingCoins > 0) lines.push(`You have ${this.coins} ${this.currency}.`);
         this.emit(lines.join("\n"));
     }
 
@@ -1230,6 +1244,285 @@ function skogarScenario() {
                 `The guidebook names three traces of Þrasi's gold. Still unseen: ${remaining.join("; ")}.`,
                 "LOOK closely at things where they live: the RING in the museum, the RAINBOW at the foot of the falls, the POOL from the overlook platform up the staircase.",
                 "EXAMINE each of the three, then bring the tale back to the curator." + bonus,
+            ] };
+        },
+    };
+}
+
+// Hamilton, Bermuda: one of seven work trips in a single year — the one where
+// the island had stopped treating you as a visitor. Bring Diana, who answers
+// the phone for June back home, to meet June in person; rent the scooters,
+// ride out to the Swizzle Inn, and find out what a regular gets back as
+// change. Written for Diana.
+function bermudaScenario() {
+    // The ending: the bluebird two-dollar note, and who was watching. Reached
+    // either at the gift-shop till (if June has met Diana) or back at June's
+    // desk (if the change came first).
+    function finish(game, atJunes) {
+        game.award(5, null);
+        const swap = atJunes
+            ? "June counts the pink and blue notes without looking at them and hands back green, the way she has at the end of every trip. The bluebird she slides back across the desk. \"Not that one,\" she says. \"That one's yours.\"\n\n"
+            : "";
+        game.win(swap + "You look at the two-dollar note for a while. Seven trips, seventy days, and the island has stopped asking where you're from. It only spends here, and it has decided you do too. You put it in the pocket where the business cards used to be.\n\n\"That's the trip,\" you tell Diana. \"That's the whole trip, right there.\"\n\n\"I know,\" Diana says. \"I was watching.\"");
+    }
+    return {
+        id: "bermuda",
+        title: "Hamilton, Bermuda",
+        destination: "Bermuda",
+        blurb: "Seven work trips in a year made you a regular in Hamilton. On this one you bring Diana to meet the client she supports, ride scooters out to the Swizzle Inn, and learn what the island gives a regular as change.",
+        banner: [
+            "LOCAL CHANGE",
+            "A SkoGarK tale from the Bermuda year. (c) 2026",
+            "\"Today's flight from Newark, New Jersey to Hamilton, Bermuda",
+            "is now departing. Get ready for take-off...\"",
+            "Type HELP for commands, and READ ITINERARY for the plan.",
+            "─────────────────────────────",
+        ].join("\n"),
+        startRoomID: "princessLobby",
+        maxScore: 35,
+        startingCoins: 80,
+        currency: "dollars",
+        build: buildBermudaWorld,
+        portalGate(game, direction) {
+            // Nobody who lives here walks to Bailey's Bay.
+            if (game.roomID === "frontStreet" && direction === "east" && !game.isCarryingKind("scooter")) {
+                return "June's office is across town and Bailey's Bay is half the island away, and nobody who lives here walks either one in this heat. The rental agent is already looking at you. (BUY SCOOTER — one rental covers the whole trip.)";
+            }
+            return null;
+        },
+        fixtureLine(game, id) {
+            switch (id) {
+                case "diana":
+                    switch (game.roomID) {
+                        case "princessLobby": return "Diana stands at the desk with her bag at her feet, taking in the pink of everything.";
+                        case "frontStreet":
+                            return game.isCarryingKind("scooter")
+                                ? "Diana is already on her scooter, helmet on, waiting for you to finish being recognised."
+                                : "Diana eyes the row of scooters with professional caution.";
+                        case "juneOffice":
+                            return game.has("metJune")
+                                ? "Diana and June are still talking. You are not needed, which was the idea."
+                                : "Diana stands half a step behind you, the way you do when you're about to meet a voice.";
+                        case "swizzleInn": return "Diana has her head tipped back, reading the ceiling.";
+                        case "giftShop": return "Diana is turning the postcard rack and pretending not to watch the till.";
+                        default: return null;
+                    }
+                case "concierge": return "The concierge has your key out before you reach the desk.";
+                case "agent": return "The rental agent raises a hand from his stool — the wave for people he's seen before.";
+                case "scooter": return "Scooters line the kerb — 30 dollars for the stay, and the stay is the whole trip.";
+                case "june": return "June is at her desk, and the room is arranged around her the way rooms arrange themselves around June.";
+                case "bartender": return "The bartender keeps one eye on the stapler. Everyone wants the stapler.";
+                case "clerk": return "The clerk folds shirts with the calm of someone who has sold this one ten thousand times.";
+                case "shirt": return "The t-shirt hangs behind the till — 18 dollars.";
+                case "cap": return "Caps are 18 dollars too.";
+                default: return null;
+            }
+        },
+        onTake(game, id) {
+            switch (id) {
+                case "cards":
+                    game.emit("You slide the cards out of the jacket pocket and leave the jacket over the chair. You won't need it here. Nobody does.");
+                    break;
+                case "shorts":
+                    game.emit("Bermuda shorts, and the knee socks that go with them. Here this is business attire — the bankers on Front Street wear it with a blazer and a tie, and nobody smiles. (WEAR SHORTS.)");
+                    break;
+                case "change":
+                    game.set("gotChange");
+                    if (game.has("metJune")) {
+                        finish(game, false);
+                    } else {
+                        game.emit("A two-dollar note, blue, with a bluebird on it. It only spends here. June swaps these for you at the end of every trip, and June is back in Hamilton — and she hasn't met Diana yet. (Ride back WEST and TALK TO JUNE.)");
+                    }
+                    break;
+                default:
+                    break;
+            }
+        },
+        onMoveObject(game, id) {
+            const item = game.item(id);
+            if (!item) return false;
+            switch (item.kind) {
+                case "shorts":
+                    if (!game.isCarrying(id)) { game.emit("They're folded on your bag. TAKE them first."); return true; }
+                    if (game.has("woreShorts")) { game.emit("You're already in them. You've been in them, mentally, since Newark."); return true; }
+                    game.set("woreShorts");
+                    game.award(5, "You change in the lobby washroom and come out in Bermuda shorts and knee socks, and nothing about you says visitor any more. The island has a dress code and you're in it. Diana approves without a word.");
+                    return true;
+                case "scooter":
+                    game.emit(game.isCarrying(id)
+                        ? "The scooters go where you go. Pick a direction — east, and keep the water on your left."
+                        : "Rent it first. (BUY SCOOTER.)");
+                    return true;
+                case "pool":
+                    if (game.has("playedPool")) { game.emit("One more rack. Nobody's keeping score, which is the only reason you're winning."); return true; }
+                    game.set("playedPool");
+                    game.award(5, "You rack them up in the middle of the dining room while people eat fish sandwiches on every side — the table is where the table is. Diana breaks. Halfway through the rack you look up and she's watching you line up a shot the way she used to watch from behind the lanes in New Jersey, as if the outcome were never in doubt. You miss. She laughs. Nobody's keeping score.");
+                    return true;
+                case "cards": case "stapler":
+                    if (game.roomID !== "swizzleInn") { game.emit("Nothing here needs stapling. The ceiling that does is at the Swizzle Inn."); return true; }
+                    if (!game.isCarryingKind("cards")) { game.emit("Your business cards are still in the jacket pocket, back at the hotel."); return true; }
+                    if (game.has("stapledCard")) { game.emit("One card per visitor. The ceiling has a policy, or at least a bartender."); return true; }
+                    game.set("stapledCard");
+                    game.award(5, "The bartender passes you the house stapler on its length of string. You stand on the bench, find a gap between a dentist from Ohio and a bank from Zürich, and — chunk — your card joins the ceiling. Diana hands you hers before you've climbed down, and — chunk — it goes up beside yours. She's been here now. It's on the ceiling.");
+                    return true;
+                default:
+                    return false;
+            }
+        },
+        onGive(game, gift, recipient) {
+            const item = game.item(gift);
+            if (!item) return false;
+            if (recipient === "diana" && (item.kind === "shirt" || item.kind === "cap")) {
+                if (game.has("dianaShirt")) { game.emit("She has one. \"One is enough swagger,\" Diana says."); return true; }
+                game.set("dianaShirt");
+                game.consumeFromInventory(gift);
+                game.award(5, "\"Swizzle Inn, Swagger Out,\" Diana reads off the front, and folds it over her arm like evidence. It is — proof she was here.");
+                return true;
+            }
+            if (recipient === "june" && item.kind === "cards") {
+                game.emit("June takes a card, looks at it, and hands it back. \"I know who you are,\" she says. \"Save it for the ceiling.\"");
+                return true;
+            }
+            if (recipient === "june" && item.kind === "change") {
+                if (game.has("metJune")) {
+                    game.consumeFromInventory(gift);
+                    finish(game, true);
+                } else {
+                    game.emit("June holds up a hand. \"In a minute. First you introduce me to the person standing behind you.\" (TALK TO JUNE.)");
+                }
+                return true;
+            }
+            return false;
+        },
+        onBuy(game, bought, ware) {
+            switch (ware) {
+                case "scooter":
+                    game.set("scooters");
+                    game.award(5, "\"Same bike,\" the agent says, and wheels it out — then a second one for Diana without being asked. Helmets, a key each, and the speech about the left side of the road; he skips the speech for you and gives Diana the whole thing. Two scooters, one rental, the whole trip.");
+                    break;
+                case "shirt": case "cap":
+                    if (game.has("changeOut")) { game.emit("More change, more bluebirds. At this rate June will need a bigger envelope."); return; }
+                    game.set("changeOut");
+                    game.revealItem("change", "giftShop");
+                    game.emit("You hand the clerk a US twenty. She rings it up and — without looking up, without the half-second pause a visitor gets — counts the change back in Bermuda money: a two-dollar note, blue, with a bluebird on it. It only spends here. The note sits on the counter between you. (TAKE CHANGE.)");
+                    break;
+                default:
+                    break;
+            }
+        },
+        onTalk(game, id) {
+            switch (id) {
+                case "concierge":
+                    game.emit("\"Welcome back,\" the concierge says, and means the word back. \"Your usual room. Harbour side.\" Seven trips, and the Hamilton Princess has stopped asking how you'd like to pay.");
+                    return true;
+                case "agent":
+                    game.emit(game.has("scooters")
+                        ? "\"Same bike as last time,\" he says. \"I kept it for you.\" You believe him, more or less."
+                        : "\"Back again?\" the agent says, which on this island is a greeting. \"Two this time?\" He's already looking at Diana's shoes. (BUY SCOOTER.)");
+                    return true;
+                case "diana":
+                    switch (game.roomID) {
+                        case "princessLobby":
+                            game.emit("\"It's pink,\" Diana says, about the hotel, and then about the taxis, and then about a bank. She's right every time.");
+                            break;
+                        case "frontStreet":
+                            game.emit("\"You've done this before,\" she says, watching the agent wave you through. Seven times. She knows; she booked the flights.");
+                            break;
+                        case "juneOffice":
+                            game.emit(game.has("metJune")
+                                ? "\"She's exactly like her voice,\" Diana says, which from Diana is a review."
+                                : "She has June's voice down from a year of phone calls. The face is new. \"Go on,\" she says. \"Introduce me.\"");
+                            break;
+                        case "swizzleInn":
+                            game.emit("\"They're all over the ceiling,\" she says, head back. \"How do they get them up there?\" The bartender, passing, holds up the stapler.");
+                            break;
+                        case "giftShop":
+                            game.emit(game.has("changeOut")
+                                ? "\"She gave you the wrong money,\" Diana says, and then sees your face. \"She didn't, did she.\""
+                                : "\"Get the shirt,\" Diana says. \"You know you want the shirt.\"");
+                            break;
+                        default:
+                            game.emit("Diana is here, which is the point.");
+                    }
+                    return true;
+                case "june":
+                    if (!game.has("metJune")) {
+                        game.set("metJune");
+                        game.award(5, "June looks up and doesn't bother with hello — you're here more often than some of her staff. Then she sees Diana, and the room rearranges itself.\n\n\"This is Diana,\" you say. \"When you call support, she's the one who answers.\"\n\n\"So you're the voice,\" June says, and comes round the desk to shake her hand properly. \"A year I've been talking to you. Sit down. Sit down.\"\n\nYou take the chair by the window and let them talk. Everyone on this island knows June; now June knows the voice. It's the reason you brought her, and it's going exactly the way you hoped.\n\nWhen you stand to go, June says what she says every trip: \"Take her out to the Swizzle. Put a card on the ceiling. And whatever Bermuda dollars you end up with — bring them to me before you fly. Same as always.\"");
+                        if (game.has("gotChange") && game.isCarrying("change")) {
+                            game.consumeFromInventory("change");
+                            finish(game, true);
+                        }
+                        return true;
+                    }
+                    if (game.has("gotChange") && game.isCarrying("change")) {
+                        game.consumeFromInventory("change");
+                        finish(game, true);
+                        return true;
+                    }
+                    game.emit("\"Go on,\" June says. \"The Swizzle's the other end of the island and the light goes early. Front Street, then North Shore Road — keep the water on your left.\" (EAST, on the scooters.)");
+                    return true;
+                case "bartender":
+                    game.emit("\"Stapler's on the string,\" the bartender says before you ask. \"Pool table's free. Lunch is fish sandwiches.\" He has given this speech several thousand times and still likes it.");
+                    return true;
+                case "clerk":
+                    game.emit(game.has("changeOut")
+                        ? "\"Have a good one,\" the clerk says, the way you say it to a neighbour."
+                        : "\"Shirts are eighteen,\" the clerk says. \"Caps too.\" She looks at your shorts and your socks and quietly drops the sentence she had ready, which was about how far it is back to Hamilton.");
+                    return true;
+                default:
+                    return false;
+            }
+        },
+        onEnterRoom(game, roomID) {
+            // Diana comes with you. That's the whole premise.
+            game.moveItem("diana", roomID);
+            if (roomID === "swizzleInn" && !game.has("rodeOut")) {
+                game.set("rodeOut");
+                game.emit("North Shore Road, the two of you in a line, the water on your left a colour nobody believes in photographs. Flatts Inlet, where the tide runs under the bridge like a river. Pastel houses with white stepped roofs built to catch the rain. Forty minutes at the island speed limit, which is 35 km/h and feels like plenty. Diana is in your mirror the whole way — and then Bailey's Bay, and the Swizzle Inn, since 1932.");
+            }
+        },
+        hintStage(game) {
+            const bonus = game.has("dianaShirt") ? "" : " Bonus: BUY a second SHIRT and GIVE SHIRT TO DIANA (+5).";
+            if (!game.isCarryingKind("cards") || !game.has("woreShorts")) {
+                return { key: "dress", clues: [
+                    "You're still dressed for Newark. The jacket over the lobby chair has something in its pocket, and Bermuda has a dress code.",
+                    "TAKE CARDS from the jacket, TAKE SHORTS from your bag, and WEAR SHORTS. Then head SOUTH to Front Street.",
+                ] };
+            }
+            if (!game.has("scooters")) {
+                return { key: "scooters", clues: [
+                    "Everyone who lives here rides. Visitors can't even hire a car.",
+                    "BUY SCOOTER at the rental on Front Street — one rental covers the whole trip, both bikes.",
+                ] };
+            }
+            if (!game.has("metJune")) {
+                const back = game.has("gotChange");
+                return { key: "june", clues: [
+                    back ? "The change is in your pocket and June hasn't met Diana. Both of those are back in Hamilton."
+                         : "Diana flew here to meet a voice. The voice has an office east of Front Street.",
+                    back ? "Ride back WEST to June's office and TALK TO JUNE."
+                         : "Go EAST to June's office and TALK TO JUNE — with Diana beside you.",
+                ] };
+            }
+            if (!game.has("stapledCard") || !game.has("playedPool")) {
+                const todo = [];
+                if (!game.has("stapledCard")) todo.push("STAPLE CARD to the ceiling");
+                if (!game.has("playedPool")) todo.push("PLAY POOL");
+                return { key: "swizzle:" + todo.join(","), clues: [
+                    "June said it: take her out to the Swizzle. North Shore Road runs EAST, water on your left.",
+                    "At the Swizzle Inn, " + todo.join(" and ") + ".",
+                ] };
+            }
+            if (!game.has("changeOut")) {
+                return { key: "shop", clues: [
+                    "The gift shop is through the back of the pub, EAST. The motto is printed on everything.",
+                    "BUY SHIRT — and watch what comes back as change." + bonus,
+                ] };
+            }
+            return { key: "change", clues: [
+                "There's a two-dollar note on the counter with a bluebird on it.",
+                "TAKE CHANGE." + bonus,
             ] };
         },
     };
@@ -2723,7 +3016,7 @@ function sydneyScenario() {
     };
 }
 
-const SCENARIOS = [houseScenario(), townScenario(), skogarScenario(), riverboatScenario(), fortPulaskiScenario(), roppongiScenario(), fujiScenario(), greenwichScenario(), sydneyScenario()];
+const SCENARIOS = [houseScenario(), townScenario(), skogarScenario(), riverboatScenario(), fortPulaskiScenario(), roppongiScenario(), fujiScenario(), greenwichScenario(), sydneyScenario(), bermudaScenario()];
 
 // MARK: - World Builders
 
@@ -2927,6 +3220,127 @@ function buildSkogarWorld() {
         description: "A railed platform hangs at the lip of Skógafoss, where the Skógá gathers itself and simply steps off the edge of the highlands. Below, the plunge pool churns white over green; upstream, the river climbs away in a staircase of smaller falls toward the Fimmvörðuháls pass; ahead lie the meadow, the village, and the flat silver line of the sea. The stairs are back down.",
         exits: { down: "skogarStairs" },
         items: ["plungePool", "river"] });
+
+    return { rooms, items };
+}
+
+function buildBermudaWorld() {
+    const items = {};
+    const addItem = (p) => { const it = makeItem(p); items[it.id] = it; };
+
+    // Diana travels with you; the engine moves her room to room.
+    addItem({ id: "diana", name: "Diana", nouns: ["diana", "friend", "colleague", "workmate"],
+        description: "Diana — client support back in Princeton, which means that when June calls, Diana is the one who picks up. She has watched you bowl and watched you golf and has flown here, this once, to be in the room instead of on the phone.",
+        isFixture: true, isCreature: true });
+
+    // The Hamilton Princess lobby.
+    addItem({ id: "concierge", name: "concierge", nouns: ["concierge", "desk", "clerk", "reception", "receptionist"],
+        description: "The concierge, in a blazer, Bermuda shorts, and knee socks, which is how you know you've landed.",
+        isFixture: true, isCreature: true });
+    addItem({ id: "itinerary", name: "itinerary", nouns: ["itinerary", "plan", "paper", "list", "notes"],
+        description: "One sheet, folded in thirds, in your own handwriting.", isTakeable: true,
+        readText: "\"BERMUDA — TRIP SEVEN\n  Hamilton Princess. Usual room.\n  Scooters: Front Street. Two this time.\n  June — the office. Bring Diana. This is the point of the trip.\n  Swizzle Inn, Bailey's Bay: the ceiling, the pool table, the gift shop.\n  Bermuda dollars → June before the flight. Same as always.\"" });
+    addItem({ id: "cards", name: "stack of business cards", nouns: ["cards", "card", "jacket", "pocket"],
+        description: "A thin stack of your business cards, in the inside pocket of a jacket you won't be wearing here.",
+        isTakeable: true, isFixture: true, kind: "cards" });
+    addItem({ id: "shorts", name: "pair of Bermuda shorts", nouns: ["shorts", "bermudas", "socks", "bag", "luggage"],
+        description: "Bermuda shorts, pressed, with knee socks folded inside them. The uniform.",
+        isTakeable: true, isFixture: true, kind: "shorts" });
+    addItem({ id: "harbour", name: "harbour", nouns: ["harbour", "harbor", "water", "view", "doors", "ferries", "ship"],
+        description: "Hamilton Harbour through the open doors: ferries crossing to Paget and Warwick, a cruise ship at Front Street twice the height of the street, and water the colour of a swimming pool.",
+        isFixture: true });
+
+    // Front Street and the scooter hire.
+    addItem({ id: "agent", name: "rental agent", nouns: ["agent", "man", "owner", "attendant"],
+        description: "The rental agent — on a stool in the shade, with the unhurried air of a man who knows exactly who rides and who walks.",
+        isFixture: true, isCreature: true });
+    addItem({ id: "scooter", name: "scooter", nouns: ["scooter", "scooters", "bike", "bikes", "moped", "rental"],
+        description: "A 50cc scooter, the island's only legal way for a visitor to drive. It will do 35 km/h, which is the speed limit, which is the point.",
+        isTakeable: true, isFixture: true, forSale: true, price: 30, kind: "scooter" });
+    addItem({ id: "helmets", name: "helmets", nouns: ["helmet", "helmets"],
+        description: "A row of white helmets on pegs. Compulsory, and after the first corner, welcome.",
+        isFixture: true });
+    addItem({ id: "ratesBoard", name: "rates board", nouns: ["board", "rates", "sign", "notice"],
+        description: "A hand-lettered board by the door.",
+        readText: "\"SCOOTER HIRE\n  Visitors may not hire cars in Bermuda — it has been the law since 1946, and nobody is sorry.\n  Scooters by the day or by the stay. Helmets compulsory.\n  LEFT side of the road. 35 km/h, and we mean it.\n  Regulars: you know where the bikes are.\"",
+        isFixture: true });
+    addItem({ id: "frontStreetView", name: "Front Street", nouns: ["street", "front", "shops", "verandahs", "birdcage", "policeman"],
+        description: "Pastel shopfronts under long verandahs, the ferry terminal, and at Heyl's Corner the Birdcage — a little raised pavilion where a policeman in Bermuda shorts directs the traffic with white gloves.",
+        isFixture: true });
+
+    // June's office.
+    addItem({ id: "june", name: "June", nouns: ["june", "famous", "client", "woman"],
+        description: "June Famous. Everyone on this island knows June; you have known her by phone and by visit for a year, and she has swapped your Bermuda dollars for US at the end of every trip.",
+        isFixture: true, isCreature: true });
+    addItem({ id: "officeDesk", name: "desk", nouns: ["desk", "office", "papers", "files"],
+        description: "June's desk, clear except for the one file that matters today, which is yours.",
+        isFixture: true });
+    addItem({ id: "telephone", name: "telephone", nouns: ["telephone", "phone"],
+        description: "The telephone Diana's voice usually comes out of. It looks smaller than it sounds.",
+        isFixture: true });
+    addItem({ id: "officeWindow", name: "window", nouns: ["window", "rooftops", "roofs", "city"],
+        description: "Hamilton rooftops: white limestone, stepped to catch the rain, every one of them a reservoir. Beyond them the harbour, and a ferry drawing a white line across it.",
+        isFixture: true });
+
+    // The Swizzle Inn.
+    addItem({ id: "bartender", name: "bartender", nouns: ["bartender", "barman", "barkeep", "server"],
+        description: "The bartender — unhurried, amused, and in charge of the stapler.",
+        isFixture: true, isCreature: true });
+    addItem({ id: "ceiling", name: "ceiling", nouns: ["ceiling", "rafters", "beams", "walls"],
+        description: "Not one square inch of ceiling. Business cards, thousands of them, layered like shingles — dentists, banks, bowling alleys, a yacht broker, a zoo — stapled up by every visitor since someone first thought of it. Yours isn't up there. Yet.",
+        isFixture: true });
+    addItem({ id: "stapler", name: "stapler", nouns: ["stapler", "string"],
+        description: "The house stapler, heavy as a brick, on a length of string tied to the bar so it can't leave with anyone. It has done more work than most employees.",
+        isFixture: true, kind: "stapler" });
+    addItem({ id: "poolTable", name: "pool table", nouns: ["pool", "table", "cue", "cues", "rack", "balls", "game"],
+        description: "A full-size pool table in the dead centre of the dining room, lunch going on around it on every side. It gives every impression of having been here before the building.",
+        isFixture: true, kind: "pool" });
+    addItem({ id: "menuBoard", name: "menu board", nouns: ["menu", "board", "chalkboard", "sign", "motto"],
+        description: "A chalkboard over the bar.",
+        readText: "\"THE SWIZZLE INN — BAILEY'S BAY — EST. 1932\n  'Swizzle Inn, Swagger Out'\n  Fish sandwich · Fish chowder · Bailey's Bay fish cakes\n  Gift shop through the back: shirts, caps, the motto on everything.\n  PLEASE RETURN THE STAPLER.\"",
+        isFixture: true });
+
+    // The gift shop.
+    addItem({ id: "clerk", name: "clerk", nouns: ["clerk", "shopkeeper", "cashier", "girl", "lady"],
+        description: "The clerk behind the till, who has sold this shirt to the whole world and can tell at a glance which part of it you're from. Or thinks she can.",
+        isFixture: true, isCreature: true });
+    addItem({ id: "shirt", name: "t-shirt", nouns: ["shirt", "tshirt", "tee", "t"],
+        description: "A cotton t-shirt, SWIZZLE INN across the chest and SWAGGER OUT across the back, so the motto reads in order as you leave.",
+        isTakeable: true, isFixture: true, forSale: true, price: 18, kind: "shirt" });
+    addItem({ id: "cap", name: "cap", nouns: ["cap", "hat"],
+        description: "A cap with the motto on it, for people who already own the shirt.",
+        isTakeable: true, isFixture: true, forSale: true, price: 18, kind: "cap" });
+    addItem({ id: "postcards", name: "postcard rack", nouns: ["postcards", "postcard", "rack"],
+        description: "A wire rack of postcards: Horseshoe Bay's pink sand, the Dockyard, a moongate, the pub itself. The places you'd go if there were a trip eight.",
+        isFixture: true });
+    // Revealed on the counter after the first purchase.
+    addItem({ id: "change", name: "handful of Bermuda dollars", nouns: ["change", "dollars", "note", "notes", "bluebird", "bills", "cash"],
+        description: "A Bermuda two-dollar note: blue, with a bluebird on the front. Legal tender nowhere else on earth — and the island's way of saying it's decided you live here.",
+        isTakeable: true, kind: "change" });
+
+    const rooms = {};
+    const addRoom = (p) => { const r = makeRoom(p); rooms[r.id] = r; };
+
+    addRoom({ id: "princessLobby", title: "Hamilton Princess, Lobby",
+        description: "The Pink Palace — the Hamilton Princess has been this colour since 1885, and the harbour outside the open doors has been that blue for longer. Ceiling fans, a marble floor, the smell of salt and furniture polish. Your bag is on the trolley with a pair of Bermuda shorts folded on top, and your jacket is already over a chair, where it will stay. Front Street and the scooter hire are south.",
+        exits: { south: "frontStreet" },
+        items: ["concierge", "diana", "itinerary", "cards", "shorts", "harbour"] });
+    addRoom({ id: "frontStreet", title: "Front Street, Scooter Hire",
+        description: "Front Street runs along the harbour under pastel verandahs — the ferry terminal, the Birdcage with its policeman in shorts, a cruise ship parked where the street ought to end. The scooter hire has its bikes lined up at the kerb, helmets on pegs, and a rates board by the door. The hotel is back north; June's office, and everything east of it, is east.",
+        exits: { north: "princessLobby", east: "juneOffice" },
+        items: ["agent", "scooter", "helmets", "ratesBoard", "frontStreetView"] });
+    addRoom({ id: "juneOffice", title: "June's Office",
+        description: "A client office two streets up from the harbour, and in it, June. A clear desk, a window full of white Hamilton rooftops, and the telephone that Diana's voice usually comes out of. Front Street is back west; North Shore Road runs east the length of the island to Bailey's Bay.",
+        exits: { west: "frontStreet", east: "swizzleInn" },
+        items: ["june", "officeDesk", "telephone", "officeWindow"] });
+    addRoom({ id: "swizzleInn", title: "The Swizzle Inn, Bailey's Bay",
+        description: "Bermuda's oldest pub, 1932 on the sign, low-ceilinged and loud at lunchtime. Every inch of the ceiling and most of the walls are business cards, stapled up by decades of visitors; a pool table stands in the exact middle of the dining room as if it had been there first; the house stapler hangs from the bar on a string. Through the back, east, is the gift shop. North Shore Road is back west.",
+        exits: { west: "juneOffice", east: "giftShop" },
+        items: ["bartender", "ceiling", "stapler", "poolTable", "menuBoard"] });
+    addRoom({ id: "giftShop", title: "Swizzle Inn Gift Shop",
+        description: "A small bright room where the motto has been printed on everything a motto can be printed on — t-shirts, caps, a rack of postcards. A clerk folds shirts behind the till. The pub is back west.",
+        exits: { west: "swizzleInn" },
+        items: ["clerk", "shirt", "cap", "postcards"] });
 
     return { rooms, items };
 }

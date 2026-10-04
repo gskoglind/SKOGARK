@@ -174,6 +174,43 @@ struct SKOGARKTests {
         #expect(game.score == 5)
     }
 
+    // MARK: - Bermuda scenario: the spine, in order
+
+    @Test func bermudaScenarioCanBeWon() {
+        let game = Game(scenario: Game.bermudaScenario())
+        play(game, [
+            "take cards", "take shorts", "wear shorts",   // dressed for the island (+5)
+            "south", "buy scooter",                        // one rental, both bikes (+5)
+            "east", "talk to june",                        // Diana meets June (+5)
+            "east", "staple card", "play pool",            // the Swizzle Inn (+5, +5)
+            "east", "buy shirt",                           // change comes back in Bermuda dollars
+        ])
+        #expect(game.has(flag: "changeOut"))
+        #expect(!game.isWon)
+        game.process("take change")
+        #expect(game.isWon)
+        #expect(game.score == 30)   // 35 needs the optional shirt for Diana
+    }
+
+    @Test func bermudaScootersGateTheRoadEast() {
+        let game = Game(scenario: Game.bermudaScenario())
+        play(game, ["south", "east"])
+        #expect(game.roomID == "frontStreet")   // nobody walks to Bailey's Bay
+        game.process("buy scooter")
+        game.process("east")
+        #expect(game.roomID == "juneOffice")
+    }
+
+    @Test func bermudaDianaFollowsAndChangeWaitsForJune() {
+        let game = Game(scenario: Game.bermudaScenario())
+        play(game, ["take cards", "south", "buy scooter", "east", "east", "east"])
+        #expect(game.currentRoomItemIDs.contains("diana"))   // she came along
+        play(game, ["buy shirt", "take change"])
+        #expect(!game.isWon)                                  // June hasn't met her yet
+        play(game, ["west", "west", "talk to june"])
+        #expect(game.isWon)                                   // June does the swap
+    }
+
     // MARK: - Parser
 
     @Test func parserHandlesShorthandAndFillerWords() {
