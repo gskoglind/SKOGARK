@@ -5,21 +5,11 @@
 Each scene needs **two PNGs** (`_portrait`, `_landscape`) in **two places** (Xcode `Assets.xcassets`, `web/images/`).
 Canonical sizes: portrait 1080x1920, landscape 1920x1080.
 
-**134 scenes · 134 rows · 0 drift item(s) · 5 scene(s) awaiting art**
+**134 scenes · 134 rows · 0 drift item(s) · 0 scene(s) awaiting art**
 
 ## Drift (fix these)
 
 - None. Both platforms are in sync.
-
-## Needed art (new scenes — generate these)
-
-Each needs a portrait and a landscape PNG, imported to both Xcode and web/images. See the scene notes in `ART_BIBLE.md`.
-
-- `bg_bermuda_front_street` — referenced by code, no art on either platform yet
-- `bg_bermuda_gift_shop` — referenced by code, no art on either platform yet
-- `bg_bermuda_june_office` — referenced by code, no art on either platform yet
-- `bg_bermuda_princess` — referenced by code, no art on either platform yet
-- `bg_bermuda_swizzle_inn` — referenced by code, no art on either platform yet
 
 ## Spare art (fine — available for future rooms)
 
@@ -210,9 +200,9 @@ Legend: ✓ present, **✗ MISSING**. Columns are Xcode/web × portrait/landscap
 
 | Scene | Xcode P | Xcode L | Web P | Web L |
 |---|---|---|---|---|
-| `bg_bermuda_front_street` | **✗** | **✗** | **✗** | **✗** |
-| `bg_bermuda_gift_shop` | **✗** | **✗** | **✗** | **✗** |
-| `bg_bermuda_june_office` | **✗** | **✗** | **✗** | **✗** |
-| `bg_bermuda_princess` | **✗** | **✗** | **✗** | **✗** |
-| `bg_bermuda_swizzle_inn` | **✗** | **✗** | **✗** | **✗** |
+| `bg_bermuda_front_street` | ✓ | ✓ | ✓ | ✓ |
+| `bg_bermuda_gift_shop` | ✓ | ✓ | ✓ | ✓ |
+| `bg_bermuda_june_office` | ✓ | ✓ | ✓ | ✓ |
+| `bg_bermuda_princess` | ✓ | ✓ | ✓ | ✓ |
+| `bg_bermuda_swizzle_inn` | ✓ | ✓ | ✓ | ✓ |
 
