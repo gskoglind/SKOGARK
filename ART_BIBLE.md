@@ -12,7 +12,9 @@ One exception to the memoir rule: **Skógar, Iceland** (added September 2026, in
 
 The stray cat at the fishmonger's stall is a memorial to Gary's cats, Georgia and Ziggy. It is already painted into the fishmonger scene. If cats appear in future art, they matter — they are never generic decoration.
 
-**V2 destinations in planning (September 2026):** Bermuda (scooters, Bermuda shorts, the Swizzle Inn, Horseshoe Bay), Windsor (the Long Walk, the Crooked House), Lake Powell / Rainbow Bridge (early-1980s day trip by four-seat prop plane), Singapore.
+**Bermuda (built October 2026, unpublished):** the first V2 destination. A work trip from the mid-1990s, when Gary flew to Hamilton seven times in one year and the island started giving him Bermuda dollars as change. Two real people: **June**, the client everyone on the island knew, and **Diana**, the colleague from Princeton who answered June's support calls and came along this once to meet her. The adventure is written for Diana. Same rule as always: friendly, recognisable by role and setting, never by likeness. Scene notes are at the end of this document.
+
+**Still in planning:** Windsor (the Long Walk, the Crooked House), Lake Powell / Rainbow Bridge (early-1980s day trip by four-seat prop plane), Singapore.
 
 ## How the pipeline works
 
@@ -75,6 +77,7 @@ Palette is chosen per destination and stays consistent across that destination�
 - **Mount Fuji** — slate greys and near-black, one warm lit window
 - **Explore (house & village)** — cool off-white tile, muted blue, warm brown
 - **Skógar, Iceland** — moss and sage green, basalt grey, black sand, glacier-white water, soft grey-blue sky; the one saturated accent is the rainbow at the falls
+- **Bermuda** — pastel house colours (coral pink, butter yellow, mint, pale blue) under white stepped roofs, turquoise harbour water, limestone off-white, warm midday sky; the one saturated accent is the blue two-dollar note (and its bluebird) in the gift shop
 
 ### Lighting
 
@@ -131,6 +134,20 @@ Six scenes, no state variants, all sunny (the adventure says so: "today the sun 
 | `bg_skogar_platform` | The railed overlook at the lip of the falls: the river arriving from the highlands (a staircase of smaller falls upstream), the water simply stepping off the edge, the plunge pool churning far below, and beyond it the meadow, the village roofs, and a flat silver sea horizon. A tiny wink of gold deep in the pool's foam is welcome — subtle enough to be arguable, exactly as the legend requires. |
 
 As built (delivered Sep 3 2026): the museum scene is the interior hall — the brass ring centred on the church door with a soft warm glow, boat and kleinur flanking, and a window looking out on two turf gables with the falls as a distant ribbon. The platform scene veils the drop in spray rising from the gorge (from the lip the curtain isn't actually visible), with the pool and the gold wink showing above it. Skógafoss keeps the same 2.3:1 curtain silhouette across all four scenes it appears in.
+
+## Bermuda — Hamilton — scene notes (art delivered Oct 4 2026)
+
+Five scenes, no state variants, all bright midday — a work trip in Bermuda shorts. Colonial-British island: cars drive on the left, every roof is white limestone stepped in ridges to catch rain, houses are pastel. Any in-world signage is in English and may appear (shop names, the pub's own sign), but no captions. Two recurring figures: **the player** (a man in Bermuda shorts, knee socks, short-sleeved shirt) and **Diana** (a woman in light summer clothes; she is in every scene after the first at the player's side — a half-step behind or beside him, never apart). Both get the standard friendly face. Nobody needs a likeness.
+
+| Scene | What's in it |
+|---|---|
+| `bg_bermuda_princess` | The lobby of the Hamilton Princess, "the Pink Palace": coral-pink walls, white columns, ceiling fans, a marble floor, tall doors standing open onto a turquoise harbour with a ferry crossing. A concierge behind a desk — in blazer, Bermuda shorts and knee socks. A luggage trolley with a bag and a folded pair of shorts on top; a jacket slung over a chair. Diana stands at the desk with her bag at her feet. This is also the **destination card** image, so the landscape version should read well as a wide slice. |
+| `bg_bermuda_front_street` | Front Street, Hamilton: a row of pastel shopfronts with long white verandahs, the harbour behind with the stern of an oversized cruise ship. In the foreground a scooter hire — four or five small scooters lined up at the kerb, white helmets on pegs, a hand-lettered rates board by the door, the agent on a stool in the shade. Optional, small and distant: the Birdcage, a little raised white traffic pavilion with a policeman in shorts. Diana eyes the scooters. |
+| `bg_bermuda_june_office` | A small, calm office interior: a clear desk, one file on it, a telephone (1990s desk phone with a cord), a window full of white stepped rooftops with the harbour beyond. June behind the desk — a woman of presence, the room arranged around her; the composition should make her its centre. Diana and the player in front of the desk, Diana half a step behind him. This is the scene the adventure exists for: warm, not grand. |
+| `bg_bermuda_swizzle_inn` | Inside the Swizzle Inn at Bailey's Bay, Bermuda's oldest pub: a low ceiling completely shingled in business cards (thousands of small pale rectangles, repetition not detail), a bar with a heavy stapler hanging from it on a string, and a full-size pool table dead centre in the dining room with lunch tables around it. A bartender behind the bar. Diana with her head tipped back, reading the ceiling. The pub's "Swizzle Inn, Swagger Out" sign over the bar is in-world signage and welcome. Two or three scooters visible through the door or window, parked outside. |
+| `bg_bermuda_gift_shop` | A small bright shop: t-shirts hanging behind a till, caps, a wire rack of postcards. A clerk behind the counter handing change across. On the counter, prominent and the one saturated accent of the whole destination: a single blue banknote with a bluebird on it. The note is shapes-only — blue paper, the bluebird, a pale oval or two — no numerals, no lettering; it is money, not signage. The player receiving it; Diana at the postcard rack, watching sidelong. |
+
+As built (delivered Oct 4 2026, drawn in code rather than by the Claude App): all ten images are generated as SVG by `tools/bermuda_art/` (`kit.py` holds the shape kit and the cast, `scenes.py` one function per scene, `render.py` renders exact-size PNGs through headless Chrome). To change a scene, edit `scenes.py` and run `python3 tools/bermuda_art/render.py`, then copy from `tools/bermuda_art/out/` into both platforms. Cast choices were made by Claude, not by Gary — June (hair up, plum blazer), Diana (short bob, butter-yellow summer dress), the player (dusty-blue shirt, khaki shorts, navy knee socks) — and are open to change. The two-dollar note is shapes-only.
 
 ---
 

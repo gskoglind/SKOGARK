@@ -41,6 +41,14 @@
         skogarFalls:    "bg_skogar_falls",
         skogarStairs:   "bg_skogar_stairs",
         skogarPlatform: "bg_skogar_platform",
+        // Hamilton, Bermuda — the work-trip year: the Pink Palace, scooters on
+        // Front Street, June's office, and the ride out to the Swizzle Inn.
+        // (No art yet; these rooms stay black until the renders land.)
+        princessLobby: "bg_bermuda_princess",
+        frontStreet:   "bg_bermuda_front_street",
+        juneOffice:    "bg_bermuda_june_office",
+        swizzleInn:    "bg_bermuda_swizzle_inn",
+        giftShop:      "bg_bermuda_gift_shop",
         westOfHouse: "bg_west_of_house",
         behindHouse: "bg_behind_house",
         kitchen:     "bg_kitchen",
@@ -526,6 +534,7 @@
         Japan:    "bg_fuji_summit_landscape",
         London:   "bg_greenwich_viewpoint_landscape",
         Sydney:   "bg_sydney_gardens_landscape",
+        Bermuda:  "bg_bermuda_princess_landscape",
     };
     const taglineEl = document.querySelector("#menu .tagline");
 

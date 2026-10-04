@@ -1,11 +1,11 @@
 # SKOGARK Asset Manifest
 
-*Generated 2026-09-03 by `tools/build_asset_manifest.py` — do not edit by hand; rerun the script after every art import.*
+*Generated 2026-10-04 by `tools/build_asset_manifest.py` — do not edit by hand; rerun the script after every art import.*
 
 Each scene needs **two PNGs** (`_portrait`, `_landscape`) in **two places** (Xcode `Assets.xcassets`, `web/images/`).
 Canonical sizes: portrait 1080x1920, landscape 1920x1080.
 
-**129 scenes · 129 rows · 0 drift item(s) · 0 scene(s) awaiting art**
+**134 scenes · 134 rows · 0 drift item(s) · 0 scene(s) awaiting art**
 
 ## Drift (fix these)
 
@@ -195,4 +195,14 @@ Legend: ✓ present, **✗ MISSING**. Columns are Xcode/web × portrait/landscap
 | `bg_sydney_return_deck` | ✓ | ✓ | ✓ | ✓ |
 | `bg_sydney_star_city` | ✓ | ✓ | ✓ | ✓ |
 | `bg_sydney_under_bridge` | ✓ | ✓ | ✓ | ✓ |
+
+### Bermuda — Hamilton
+
+| Scene | Xcode P | Xcode L | Web P | Web L |
+|---|---|---|---|---|
+| `bg_bermuda_front_street` | ✓ | ✓ | ✓ | ✓ |
+| `bg_bermuda_gift_shop` | ✓ | ✓ | ✓ | ✓ |
+| `bg_bermuda_june_office` | ✓ | ✓ | ✓ | ✓ |
+| `bg_bermuda_princess` | ✓ | ✓ | ✓ | ✓ |
+| `bg_bermuda_swizzle_inn` | ✓ | ✓ | ✓ | ✓ |
 

@@ -36,6 +36,7 @@ ADVENTURE_GROUPS = [
     ("Japan — Roppongi", ("bg_roppongi_",)),
     ("London — Greenwich", ("bg_greenwich_",)),
     ("Sydney", ("bg_sydney_",)),
+    ("Bermuda — Hamilton", ("bg_bermuda_",)),
 ]
 
 # Base names the code assembles at runtime rather than naming literally

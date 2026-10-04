@@ -211,6 +211,7 @@ struct MenuView: View {
         case "Japan":    return "bg_fuji_summit_landscape"
         case "London":   return "bg_greenwich_viewpoint_landscape"
         case "Sydney":   return "bg_sydney_gardens_landscape"
+        case "Bermuda":  return "bg_bermuda_princess_landscape"
         default:         return nil
         }
     }
@@ -552,6 +553,14 @@ struct GameView: View {
         case "observatory":    return "bg_greenwich_observatory"
         case "wolfeViewpoint": return "bg_greenwich_viewpoint"
         case "blackheath":     return "bg_greenwich_blackheath"
+        // Hamilton, Bermuda — the work-trip year: the Pink Palace, scooters
+        // on Front Street, June's office, and the ride out to the Swizzle Inn.
+        // (No art yet; the pane stays black until the renders land.)
+        case "princessLobby": return "bg_bermuda_princess"
+        case "frontStreet":   return "bg_bermuda_front_street"
+        case "juneOffice":    return "bg_bermuda_june_office"
+        case "swizzleInn":    return "bg_bermuda_swizzle_inn"
+        case "giftShop":      return "bg_bermuda_gift_shop"
         default:            return nil
         }
     }
